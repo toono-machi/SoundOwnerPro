@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#43251d">
+<title>Sound Owner Pro — ボイスドラマ音声編集</title><link rel="icon" href="assets/pudding.png"><link rel="stylesheet" href="css/style.css"></head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="assets/title.png" alt="Sound Owner Pro"></div>
+  <label class="project-title">プロジェクト：<input id="projectName" type="text" value="新しいプロジェクト" aria-label="プロジェクト名"></label>
+  <div class="top-actions"><button id="newProject" class="top-button icon-top-button" title="新規作成"><img src="assets/icon-new.png" alt="" class="btn-icon-img"> 新規</button><button id="openProject" class="top-button icon-top-button" title="開く"><img src="assets/icon-open.png" alt="" class="btn-icon-img"> 開く</button><button id="saveProject" class="top-button icon-top-button" title="保存"><img src="assets/icon-save.png" alt="" class="btn-icon-img"> 保存</button></div>
+  <div class="top-actions right-actions"><button id="openSettings" class="top-button">⚙ 設定</button><button id="openHelp" class="top-button">ⓘ ヘルプ</button></div>
+</header>
+<div class="app-shell">
+<nav class="sidebar" aria-label="メインメニュー">
+  <button class="nav-button" data-view="home"><span>⌂</span>ホーム</button><button class="nav-button active" data-view="edit"><span>≋</span>編集</button><button class="nav-button" data-view="markers"><span>⚑</span>マーカー</button><button class="nav-button" data-view="project"><span>▥</span>プロジェクト</button><button class="nav-button" data-view="export" title="音声を書き出す"><span aria-hidden="true">⇧</span>書き出し</button><button class="nav-button" data-view="manual" title="使い方マニュアル"><span>▤</span>マニュアル</button>
+</nav>
+<main class="main-content" id="mainContent">
+  <section class="dashboard-view hidden" id="dashboardView" aria-label="ホーム・マニュアル・プロジェクト管理"></section>
+  <div class="upper-workspace">
+    <section class="panel script-panel" aria-label="台本とキャラクター">
+      <div class="panel-tabs script-tabs"><button class="tab active" data-script-tab="script">▤ 台本</button><button class="tab" data-script-tab="characters">♙ キャラクター</button></div>
+      <div class="script-content" id="scriptTab">
+        <div class="toolbar wrap"><button id="importScript" class="light-button script-action"><img src="assets/icon-script-import.png" alt="" class="script-action-icon"> 台本を読み込み</button><button id="pasteScript" class="light-button script-action"><img src="assets/icon-script-paste.png" alt="" class="script-action-icon"> 貼り付け</button><button id="editScript" class="light-button compact" title="台本を編集">✎</button></div>
+        <div class="script-lines" id="scriptLines"></div>
+        <div class="script-editor hidden" id="scriptEditor"><textarea id="scriptText" placeholder="001 あきお：おはよう&#10;002 さくら：あ、おはよう！&#10;&#10;ここに台本を貼り付けてください。"></textarea><div class="toolbar"><button id="applyScript" class="gold-button">台本を反映</button><button id="cancelScript" class="light-button">閉じる</button></div></div>
+        <div class="mini-footer"><span id="scriptCount">0 セリフ</span><span>行をクリックして確認</span></div>
+      </div>
+      <div class="script-content hidden" id="characterTab"><div class="char-help">名前を登録すると、専用トラックとメディアの分類先に使用できます。</div><div class="toolbar"><input id="characterName" placeholder="キャラクター名" maxlength="40"><button id="addCharacter" class="gold-button">＋ 登録</button></div><div class="character-list" id="characterList"></div></div>
+    </section>
+    <section class="panel timeline-panel" aria-label="音声タイムライン">
+      <div class="timeline-toolbar">
+        <div class="time-display"><strong id="timeDisplay">00:00:00.000</strong><span> / </span><span id="durationDisplay">00:00:00.000</span></div>
+        <div class="transport"><button id="toStart" title="先頭へ">|◀</button><button id="backFive" title="5秒戻る">◀◀</button><button id="playBtn" class="play-button" title="再生 / 一時停止">▶</button><button id="forwardFive" title="5秒進む">▶▶</button><button id="stopBtn" title="停止">↶</button></div>
+        <div class="transport-extras"><button id="addMarker" title="通常マーカーを追加">⚑＋</button><button id="splitClip" title="選択クリップをシーク位置で分割（S）">✂</button><select id="timeScale" aria-label="タイムライン拡大率"><option value="12">縮尺 50%</option><option value="24" selected>縮尺 100%</option><option value="48">縮尺 200%</option><option value="96">縮尺 400%</option><option value="192">縮尺 800%</option></select></div>
+      </div>
+      <div class="timeline-actions"><button id="addTrack" class="small-btn">＋ トラック追加</button><button id="removeTrack" class="small-btn" title="選択中のトラックを削除">− トラック削除</button><span class="timeline-hint" id="timelineHint">波形をドラッグして移動、左右の端でトリミング</span></div>
+      <div class="timeline-frame"><div class="track-headers"><div class="ruler-label">TRACKS</div><div class="marker-label">MARKERS</div><div id="trackHeaders"></div></div><div class="timeline-scroll" id="timelineScroll"><div class="timeline-surface" id="timelineSurface"><div class="ruler" id="ruler"></div><div class="marker-lane" id="markerLane"></div><div id="trackLanes"></div><div class="playhead" id="playhead"><div class="playhead-handle"></div></div></div></div></div>
+      <div class="timeline-bottom"><span id="selectionInfo">トラック / クリップ未選択</span><div class="toolbar"><button class="small-btn" id="zoomOut">－</button><span>ズーム</span><button class="small-btn" id="zoomIn">＋</button></div></div>
+    </section>
+    <section class="panel media-panel" aria-label="メディアボックス">
+      <div class="media-heading"><h2>♫ メディアボックス</h2></div>
+      <div class="media-types" id="mediaTypes"><button class="active" data-category="character">キャラクター</button><button data-category="sfx">効果音</button><button data-category="env">環境音</button><button data-category="bgm">BGM</button></div>
+      <div class="media-subtabs"><div id="mediaFolders" class="folder-chips"></div><button id="addFolder" class="small-btn" title="サブタブを追加">＋</button></div>
+      <div class="media-search"><input id="mediaSearch" placeholder="⌕ ファイルを検索…"><button id="mediaSort" class="icon-button" title="名前順で並べ替え">☷</button></div>
+      <div class="media-list" id="mediaList"></div>
+      <div class="media-footer"><button id="mediaImportBottom" class="light-button">＋ 音声素材を追加</button><div class="preview-volume">♫ <input id="previewVolume" type="range" min="0" max="100" value="75" title="視聴音量"></div></div>
+    </section>
+  </div>
+  <div class="lower-workspace">
+    <section class="panel effect-panel" id="effectPanel" aria-label="音声プロパティとエフェクト">
+      <div class="panel-tabs lower-tabs"><button class="tab active" data-effects-tab="properties">☷ 音声プロパティ</button><button class="tab" data-effects-tab="effects">✦ エフェクト</button></div>
+      <div class="effect-inner" id="propertiesTab"><div class="effect-upper"><label>選択トラック <select id="effectTrack"></select></label><span class="effect-target" id="effectTarget">トラックを選択してください</span></div><div class="effect-layout"><div class="effect-list" id="effectChain"></div><div class="eq-box"><div class="eq-toolbar"><strong>✧ イコライザー</strong><select id="effectPreset"></select></div><canvas id="eqCanvas" width="560" height="190"></canvas><div id="clipProps" class="clip-props"></div></div></div></div>
+      <div class="effect-inner hidden" id="effectsTab">
+        <div class="fx-type-switch" id="fxTypeSwitch" role="tablist" aria-label="エフェクト種類">
+          <button type="button" role="tab" aria-selected="true" class="active" data-fx-kind="eq">✧ イコライザー</button>
+          <button type="button" role="tab" aria-selected="false" data-fx-kind="reverb">◈ リバーブ</button>
+          <button type="button" role="tab" aria-selected="false" data-fx-kind="compressor">▥ コンプレッサー</button>
+          <button type="button" role="tab" aria-selected="false" data-fx-kind="limiter">◆ リミッター</button>
+        </div>
+        <div class="effect-upper fx-preset-bar">
+          <label>対象トラック <select id="fxTrack"></select></label>
+          <label class="fx-preset-field"><span>プリセット</span><select id="fxPreset" aria-label="選択中のエフェクトのプリセット"></select></label>
+          <button id="applyPreset" class="gold-button">適用</button>
+          <label class="fx-enabled-field"><input id="fxEnabled" type="checkbox"> 有効</label>
+        </div>
+        <div class="fx-editor-heading"><strong id="fxEditorTitle">イコライザー</strong><span id="fxEditorHint">周波数帯域を調整します</span></div>
+        <div class="fx-control-grid" id="fxControls" role="tabpanel" aria-label="選択中のエフェクト設定"></div>
+        <div class="toolbar preset-tools"><button id="savePreset" class="light-button">＋ このエフェクトを登録</button><button id="exportPresets" class="light-button">プリセットJSON保存</button><button id="importPresets" class="light-button">プリセットJSON読込</button></div>
+      </div>
+    </section>
+    <section class="panel mixer-panel" aria-label="音量ミキサー"><div class="lower-head">☷ ミキサー</div><div class="mixer-grid" id="mixerGrid"></div></section>
+
+  </div>
+  <section class="export-screen hidden" id="exportScreen" aria-label="音声の書き出し画面">
+    <header class="dash-hero dash-hero-no-art export-hero">
+      <div class="dash-hero-text"><div class="dash-eyebrow">Sound Owner Pro · EXPORT</div><h1>音声の書き出し</h1><p>形式・対象・範囲を指定して、編集した音声を保存できます。</p></div>
+      <button type="button" class="manual-back" id="returnToEditor">← 編集画面へ戻る</button>
+    </header>
+    <div class="export-workspace-grid">
+    <section class="panel export-panel" aria-label="書き出し"><div class="lower-head">⇧ 書き出し設定</div><div class="export-inner"><div class="export-row"><label>形式</label><select id="exportFormat"><option value="wav">WAV（非圧縮）</option><option value="mp3">MP3（192kbps）</option></select></div>
+      <div class="export-row"><label>対象</label><select id="exportMode"><option value="all">全体を書き出し</option><option value="characters">キャラクターのみ</option><option value="perCharacter">キャラクターごと</option><option value="selectedCharacters">指定キャラクターのみ</option><option value="perCategory">キャラクター / 効果音 / 環境音 / BGMごと</option><option value="preview">視聴用音声（専用マーカー範囲）</option></select></div>
+      <div class="character-checks hidden" id="exportCharacterChecks"></div>
+      <div class="export-row"><label>範囲</label><div class="export-options"><label><input type="radio" name="exportRange" value="full" checked> 全範囲</label><label><input type="radio" name="exportRange" value="markers"> マーカーで分割</label></div></div>
+      <div class="export-row" id="filenameRow"><label>音声名</label><button id="editFilenames" class="light-button slim">001〜 / 名前を編集</button></div>
+      <div class="export-row preview-options hidden" id="previewOptions"><label>フェード</label><div class="fade-pair"><span>IN <input id="previewFadeIn" type="number" min="0" max="30" step="0.1" value="1"></span><span>OUT <input id="previewFadeOut" type="number" min="0" max="30" step="0.1" value="2"></span><small>秒</small></div></div>
+      <div class="export-row"><label>出力先</label><div class="destination">▱ ブラウザのダウンロード先</div></div>
+      <button class="export-button" id="exportAudio">⇧ 書き出し開始</button><div class="export-status" id="exportStatus" role="status" aria-live="polite"></div>
+    </div></section>
+      <aside class="panel export-guide-panel" aria-label="書き出しの確認とガイド">
+        <div class="lower-head">♫ 書き出しガイド</div>
+        <div class="export-guide-inner">
+          <h2>現在のプロジェクト</h2>
+          <p class="export-project-title" id="exportProjectName">新しいプロジェクト</p>
+          <div class="export-stats"><div><strong id="exportClipCount">0</strong><span>クリップ</span></div><div><strong id="exportMarkerCount">0</strong><span>分割マーカー</span></div><div><strong id="exportTrackCount">0</strong><span>トラック</span></div></div>
+          <h2>書き出し対象</h2>
+          <p>キャラクターのみ・キャラクター別・種類別・全体から選択できます。指定キャラクターのみ書き出す場合は、左のチェックボックスで選んでください。</p>
+          <h2>マーカーで分割する場合</h2>
+          <p>編集画面で通常マーカーを追加し、「範囲」を「マーカーで分割」にすると、<strong>001・002・003…</strong> の連番で書き出します。</p>
+          <button type="button" class="light-button export-guide-action" id="exportEditMarkers">⚑ 編集画面でマーカーを設定</button>
+          <h2>視聴用音声</h2>
+          <p>視聴用の開始・終了マーカーを設定してから、対象を「視聴用音声」にすると、フェードイン・アウトの秒数を調整して書き出せます。</p>
+          <p class="export-guide-note">WAVはオフラインで書き出せます。MP3は初回のエンコーダー読み込み時にインターネット接続が必要です。</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+  <footer class="bottom-controls"><span>再生モード</span><div class="mode-buttons" id="playModes"><button data-mode="all" class="active">すべて再生</button><button data-mode="characters">キャラクターのみ</button><button data-mode="noncharacters">キャラ以外</button><button data-mode="sfx">効果音のみ</button><button data-mode="env">環境音のみ</button><button data-mode="bgm">BGMのみ</button></div></footer>
+</main></div>
+<img class="decoration mimosa-right" src="assets/mimosa-right.png" alt=""><img class="decoration mimosa-left" src="assets/mimosa-left.png" alt=""><img class="decoration pudding" src="assets/pudding.png" alt=""><div class="bottom-pattern" aria-hidden="true"></div>
+<template id="manualTemplate">
+  <div class="manual-embedded">
+    <header class="dash-hero dash-hero-no-art manual-hero">
+      <div class="dash-hero-text"><div class="dash-eyebrow">Sound Owner Pro · GUIDE</div><h1>使い方マニュアル</h1><p>台本の読み込みから音声編集・書き出し・保存まで、全13章で解説します。</p></div>
+      <button type="button" class="manual-back" data-dash-action="edit">← 編集画面へ戻る</button>
+    </header>
+    <div class="manual-layout">
+      <aside class="manual-toc" aria-label="マニュアル目次">
+        <h2>目次 <small>全13章</small></h2>
+        <nav aria-label="章を選択"><button type="button" class="manual-toc-link" data-manual-target="overview">01 はじめに</button>
+<button type="button" class="manual-toc-link" data-manual-target="start">02 新規作成・画面の見方</button>
+<button type="button" class="manual-toc-link" data-manual-target="script">03 台本の読み込み</button>
+<button type="button" class="manual-toc-link" data-manual-target="characters">04 キャラクター管理</button>
+<button type="button" class="manual-toc-link" data-manual-target="media">05 メディアボックス</button>
+<button type="button" class="manual-toc-link" data-manual-target="timeline">06 タイムライン編集</button>
+<button type="button" class="manual-toc-link" data-manual-target="play">07 再生・ミキサー</button>
+<button type="button" class="manual-toc-link" data-manual-target="effects">08 エフェクトとプリセット</button>
+<button type="button" class="manual-toc-link" data-manual-target="markers">09 マーカー・視聴範囲</button>
+<button type="button" class="manual-toc-link" data-manual-target="export">10 音声の書き出し</button>
+<button type="button" class="manual-toc-link" data-manual-target="projects">11 保存・ライブラリ</button>
+<button type="button" class="manual-toc-link" data-manual-target="shortcuts">12 ショートカット</button>
+<button type="button" class="manual-toc-link" data-manual-target="trouble">13 困ったときは</button></nav>
+      </aside>
+      <article class="manual-paper" aria-label="Sound Owner Pro 操作マニュアル">
+        <div class="manual-cover"><h2>Sound Owner Pro<br>操作マニュアル</h2><p>知りたい項目は左側の目次から移動できます。</p></div>
+        <div class="manual-body">
+<section id="overview"><h2>01｜はじめに</h2>
+<p class="lead">Sound Owner Proは、ボイスドラマや朗読作品向けのブラウザ音声編集アプリです。台本に付けた3桁の番号をもとに音声素材を整理し、キャラクター別のトラックで編集できます。</p>
+<h3>基本的な作業の流れ</h3><ol><li>新規プロジェクトを作成します。</li><li>台本をTXTで読み込むか、貼り付けます。</li><li>必要なキャラクターを確認し、WAV/MP3音声を追加します。</li><li>素材をタイムラインに置き、位置や音質を調整します。</li><li>マーカーで区切り、WAVまたはMP3を書き出します。</li><li>途中作業は「保存」で音声を含む専用JSONに保存します。</li></ol>
+<div class="manual-note">音声の読み込み・再生・加工は基本的にブラウザ内で行います。MP3での<strong>書き出し</strong>のみ、初回に外部エンコーダーを読み込むためネット接続が必要です。</div></section>
+<section id="start"><h2>02｜新規作成・画面の見方</h2>
+<h3>新規プロジェクト</h3><ol><li>画面上部の「新規」ボタン、またはホームの「新規プロジェクト」をクリックします。</li><li>編集中の内容がある場合、確認ダイアログで作成を実行します。</li><li>上部の「プロジェクト：」欄で作品名を入力します。</li></ol>
+<h3>画面の各エリア</h3><table class="manual-table"><tr><th>場所</th><th>役割</th></tr><tr><td>左メニュー</td><td>ホーム／編集／マーカー／プロジェクト／書き出し／マニュアルを切り替えます。</td></tr><tr><td>左上「台本・キャラクター」</td><td>台本と登場人物を管理します。</td></tr><tr><td>中央上</td><td>再生・シーク・波形の配置と編集を行います。</td></tr><tr><td>右上「メディアボックス」</td><td>音声素材をカテゴリとサブタブで管理します。</td></tr><tr><td>左下</td><td>音声プロパティ、EQなどのエフェクトを設定します。</td></tr><tr><td>中央下</td><td>トラックとマスターの音量を調整します。</td></tr><tr><td>左メニュー「書き出し」</td><td>専用画面で範囲・形式・対象を指定して音声を書き出します。</td></tr><tr><td>最下部</td><td>再生対象の種類を選択します。</td></tr></table></section>
+<section id="script"><h2>03｜台本の読み込み</h2>
+<h3>TXTから読み込む</h3><ol><li>左上の<strong>「台本」</strong>タブを開きます。</li><li>「台本を読み込み」を押して <code>.txt</code> ファイルを選択します。</li><li>読み込まれたセリフが番号順に表示されます。</li></ol>
+<h3>貼り付け・直接編集</h3><p>「貼り付け」はクリップボードからテキストを読み込みます。ブラウザの権限制限などで読み取れない場合は編集欄が開くので、そこで貼り付けて「台本を反映」を押してください。鉛筆ボタンからも編集できます。</p>
+<h3>台本の書き方</h3><pre><code>001 あきお：おはよう
+002 さくら：あ、おはよう！
+003 あきお：今日はいい天気だね。</code></pre>
+<p>各セリフの先頭に<strong>半角数字3桁</strong>、半角スペース、キャラクター名、全角または半角コロン、セリフを記載します。連続した次の行は直前のセリフの続きをとして表示されます。</p><p>台本中のセリフをクリックすると、同番号の配置済み音声があれば該当クリップへ移動します。まだ配置していない場合は該当キャラクターの素材サブタブを開きます。</p></section>
+<section id="characters"><h2>04｜キャラクター管理</h2><ol><li>左上の<strong>「キャラクター」</strong>タブを開きます。</li><li>「キャラクター名」を入力して「登録」をクリックします。</li><li>「＋ トラック」で専用キャラクタートラックを追加できます。</li></ol><p>台本を読み込むと、書式に合うセリフからキャラクター名を自動登録します。追加された音声は先頭3桁の番号と台本を照合し、そのキャラクターに仕分けます。</p><div class="manual-note">キャラクターを削除すると、そのキャラクターの専用トラックと配置済みクリップも削除されます。削除確認の内容を必ず確認してください。</div></section>
+<section id="media"><h2>05｜メディアボックス</h2><h3>音声を追加する</h3><ol><li>右上で「キャラクター／効果音／環境音／BGM」を選びます。</li><li>下部の<strong>「＋ 音声素材を追加」</strong>を押し、WAVまたはMP3を選びます。メディアボックスへのドラッグ＆ドロップも使えます。</li><li>音声ファイルが一覧に表示されます。</li></ol>
+<h3>自動仕分け</h3><p>例えば台本に「001 あきお：…」「002 さくら：…」があると、<code>001_収録.wav</code> は「あきお」、<code>002_収録.wav</code> は「さくら」のサブタブに分類されます。番号と一致しないキャラクター音声は「未分類」に置かれます。</p>
+<h3>効果音・環境音・BGMのサブタブ</h3><p>サブタブ横の「＋」で新規フォルダーを作れます。例：BGMの「明るい」「しっとり」「不穏」。既存サブタブは右クリックすると名前変更と削除ができます。</p>
+<h3>素材行のボタン</h3><table class="manual-table"><tr><th>操作</th><th>内容</th></tr><tr><td>▶</td><td>素材を単体で試聴します。下部スライダーで視聴音量を調整します。</td></tr><tr><td>ファイル名</td><td>名前・カテゴリ・キャラクターやサブタブを編集します。</td></tr><tr><td>＋</td><td>現在のシーク位置に、該当種類のトラックへ音声クリップを配置します。</td></tr><tr><td>ゴミ箱</td><td>確認後、その素材を削除します。<strong>すでに配置した同素材のクリップも削除</strong>されます。</td></tr></table><p>検索欄からファイル名を検索できます。並べ替えボタンで名前順にできます。</p></section>
+<section id="timeline"><h2>06｜タイムライン編集</h2><ol><li>再生位置を変える場合は、タイムライン上部の目盛りをクリックします。</li><li>メディアボックスの「＋」で音声を配置します。</li><li>クリップ本体をドラッグすると位置を移動します。別のトラックへドラッグすることもできます。</li><li>クリップ左右の端をドラッグして開始・終了位置をトリミングします。</li><li>クリップを選んでシーク位置へ移動し、ハサミボタンまたは <code>S</code> キーで分割します。</li><li>クリップ選択後 <code>Delete</code> キーで削除します。</li></ol><h3>トラックの種類</h3><p>キャラクター、効果音、環境音、BGMの4種類です。「＋ トラック追加」から追加できます。キャラクタートラックは登録済みの名前から選びます。</p><h3>編集時の注意</h3><p>クリップを削除してもメディアボックスの素材本体は残ります。素材本体をゴミ箱で削除すると、配置されている該当クリップも消えます。</p><p>ズームボタンまたは縮尺欄でタイムラインの表示倍率を調整できます。</p></section>
+<section id="play"><h2>07｜再生と音量ミキサー</h2><h3>再生方法</h3><p>上部の「▶」または <code>Space</code> キーで再生します。停止ボタンで再生位置を先頭に戻せます。最下部の再生モードを先に切り替えると、選択した種類だけを再生できます。</p><ul><li>すべて再生</li><li>キャラクターのみ</li><li>キャラクター以外</li><li>効果音のみ／環境音のみ／BGMのみ</li></ul>
+<h3>トラックのM・S</h3><p><strong>M（ミュート）</strong>はそのトラックを無音に、<strong>S（ソロ）</strong>は対象トラックを優先して単独再生します。</p><h3>ミキサー</h3><p>各トラックの縦スライダーで音量を調整します。<strong>マスター</strong>は最終的な全体音量です。ミキサー音量は書き出しにも反映されます。</p></section>
+<section id="effects"><h2>08｜エフェクトとプリセット</h2><p>左下で対象トラックを選び、「エフェクト」タブへ移ります。上部の<strong>4種類の切り替えボタン</strong>で調整画面が変わります。</p><table class="manual-table"><tr><th>エフェクト</th><th>用途と設定例</th></tr><tr><td>イコライザー</td><td>周波数を調整。ラジオ音声、電話音声、遠くの声、壁越しの声など。</td></tr><tr><td>リバーブ</td><td>空間の響きを追加。小さな部屋、広い部屋、大ホール、廊下など。</td></tr><tr><td>コンプレッサー</td><td>音量の大小差を抑え、セリフを聴き取りやすくします。</td></tr><tr><td>リミッター</td><td>急なピークを抑制します。</td></tr></table>
+<h3>プリセットの適用</h3><ol><li>調整するエフェクトを選びます。</li><li>プリセットのプルダウンから名前を選びます。</li><li>「適用」を押します。</li><li>必要に応じてスライダーと「有効」のチェックを調整します。</li></ol><p>プリセットはエフェクト種類ごとに独立し、<strong>他の種類の設定を上書きしません</strong>。</p>
+<h3>カスタムプリセット</h3><p>調整後「＋ このエフェクトを登録」で現在の種類の設定だけを登録できます。ブラウザに保持されたカスタムプリセットは別プロジェクトでも使えます。「プリセットJSON保存」「プリセットJSON読込」でバックアップや移行が可能です。</p></section>
+<section id="markers"><h2>09｜マーカーと視聴用範囲</h2><h3>通常マーカー</h3><p>シーク位置を決め、「⚑＋」から<strong>通常マーカー</strong>を追加します。マーカーを分割点にして複数ファイルとして書き出せます。左メニュー「マーカー」では一覧、位置への移動、削除ができます。</p><h3>視聴用マーカー</h3><ol><li>タイムラインで視聴用音声の開始位置にシークします。</li><li>「⚑＋」で「視聴開始」を選びます。</li><li>終了位置にシークして「視聴終了」を追加します。</li><li>書き出し範囲を「視聴用音声」にし、フェードIN／OUT秒数を指定します。</li></ol><p>視聴用マーカーは通常の分割マーカーとは別管理です。マーカーはドラッグして移動でき、タイムライン上でダブルクリックして削除できます。</p></section>
+<section id="export"><h2>10｜音声の書き出し</h2><ol><li>右下で「形式」をWAVかMP3から選択します。</li><li>「対象」から全体、キャラクターのみ、キャラクターごと、指定キャラクター、カテゴリごと、視聴用を選びます。</li><li>必要なら「マーカーで分割」を選びます。</li><li>区間名を指定する場合は「音声名」を開き、1行に1つずつ入力します。</li><li>「書き出し開始」を押します。</li></ol>
+<h3>連番の名前</h3><p>マーカー分割では、頭に <code>001</code>、<code>002</code>、<code>003</code> …が付きます。区間名を入力した場合は <code>001_出会い.wav</code> のようになります。複数ファイルのときはZIPにまとめます。</p><h3>視聴用音声</h3><p>視聴開始／終了マーカーで範囲を限定し、書き出し欄のフェードIN／OUT秒数を指定します。時間は指定した範囲内に制限されます。</p><div class="manual-note"><strong>対応書き出し：</strong>WAV（44.1 kHz、16bitステレオ）／MP3（192 kbps）。MP3書き出しにはエンコーダーのネット読み込みが必要です。1ファイル30分を超える書き出しはサポートしていません。</div></section>
+<section id="projects"><h2>11｜保存とホームのプロジェクト一覧</h2><h3>プロジェクトを保存する</h3><ol><li>上部の<strong>「保存」</strong>を押します。</li><li>音声データを含む <code>.soundowner.json</code> がブラウザのダウンロード先に保存されます。</li><li>同時に、このブラウザのローカルライブラリにも保存を試みます。</li></ol>
+<h3>保存したプロジェクトを開く</h3><ul><li><strong>ホームから：</strong>左の「ホーム」を開き、履歴の作品名または「開く」をクリックします。</li><li><strong>JSONファイルから：</strong>上部の「開く」、またはホームの「プロジェクトを開く（JSON）」から選択します。</li><li><strong>JSONを再ダウンロード：</strong>ホームの「JSON」からバックアップファイルを取り出せます。</li><li><strong>履歴を削除：</strong>「削除」でブラウザ内の履歴だけを削除します。PCに保存済みのJSONは消えません。</li></ul>
+<h3>過去のプロジェクトが表示されない場合</h3><p>ホームの履歴は、<strong>この更新版で保存またはJSON読み込みしたもの</strong>から登録されます。以前のバージョンで作ったプロジェクトは、保存済みのJSONファイルを一度「開く」で読み込んでください。</p>
+<div class="manual-note"><strong>重要：</strong>ライブラリは使用中ブラウザ内のIndexedDBに保存します。別端末・別ブラウザとは同期しません。ブラウザデータ消去、プライベートモード、保存容量不足などで消えることがあります。<strong>ダウンロードしたJSONを必ず別途保管</strong>してください。大容量の音声プロジェクトはブラウザの保存容量により履歴登録に失敗する場合があります。</div></section>
+<section id="shortcuts"><h2>12｜ショートカット一覧</h2><table class="manual-table"><tr><th>キー</th><th>操作</th></tr><tr><td><code>Space</code></td><td>再生／一時停止</td></tr><tr><td><code>M</code></td><td>通常マーカー追加</td></tr><tr><td><code>S</code></td><td>選択クリップを現在位置で分割</td></tr><tr><td><code>Delete</code> / <code>Backspace</code></td><td>選択中のクリップを削除</td></tr><tr><td><code>←</code> / <code>→</code></td><td>再生位置を0.5秒移動</td></tr><tr><td><code>Shift + ←</code> / <code>Shift + →</code></td><td>再生位置を5秒移動</td></tr><tr><td><code>Ctrl + S</code>（Mac: <code>⌘ + S</code>）</td><td>プロジェクトJSON保存</td></tr></table><p>入力欄やダイアログを操作中は、文字入力を優先するため一部ショートカットは無効になります。</p></section>
+<section id="trouble"><h2>13｜困ったときは</h2><h3>音声が自動で仕分けされない</h3><p>台本の番号が半角数字3桁になっているか、音声ファイル名がその3桁で始まるかをご確認ください。台本反映後にメディアの分類を確認してください。</p>
+<h3>音が聞こえない</h3><p>トラックのM（ミュート）や他トラックのS（ソロ）、再生モード、トラック／マスター音量、素材の有無を確認してください。ブラウザの音量も確認してください。</p>
+<h3>MP3書き出しが失敗する</h3><p>ネット接続があるか確認し、再試行してください。失敗が続く場合、WAV形式で書き出してください。</p>
+<h3>ホームのプロジェクト履歴が消えた</h3><p>ブラウザのサイトデータ消去などで消える場合があります。ダウンロード済みの <code>.soundowner.json</code> を再度読み込めば編集を再開できます。</p>
+<h3>ファイルが重くて保存できない</h3><p>音声を含んだJSONは元音声より大きくなる場合があります。不要素材を整理し、長い作品はプロジェクトを分割してください。</p>
+<h3>反映されない・画面がおかしい</h3><p>GitHub Pagesへ更新した直後はブラウザに古いファイルが残ることがあります。<code>Ctrl + F5</code> で再読み込みしてください。作業中の場合は先にプロジェクトを保存してください。</p></section>
+</div>
+      </article>
+    </div>
+  </div>
+</template>
+<div class="toast-area" id="toastArea" aria-live="polite"></div>
+<dialog id="modal"><form method="dialog"><header><h3 id="modalTitle">ダイアログ</h3><button class="modal-close" value="cancel" aria-label="閉じる">×</button></header><div id="modalContent"></div><footer id="modalActions"></footer></form></dialog>
+<input id="scriptFile" type="file" accept=".txt,text/plain" hidden><input id="audioFiles" type="file" accept="audio/*,.wav,.mp3" multiple hidden><input id="projectFile" type="file" accept=".json,application/json" hidden><input id="presetFile" type="file" accept=".json,application/json" hidden>
+<script src="js/audio.js" defer></script><script src="js/export.js" defer></script><script src="js/app.js" defer></script>
+</body></html>
