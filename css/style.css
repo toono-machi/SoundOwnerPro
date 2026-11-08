@@ -360,3 +360,60 @@
 .timeline-actions .history-btn:hover:not(:disabled){background:#7b4b39}
 .timeline-actions .history-btn:disabled{opacity:.37;cursor:default;filter:none}
 @media(max-width:1400px){.timeline-actions .history-btn{padding:4px 6px}.timeline-actions .history-btn span{display:none}.timeline-actions .history-btn{font-size:17px;min-width:29px}.timeline-hint{display:none}}
+
+/* v2.0 — シナリオ執筆・100シーン構成管理 */
+.scenario-screen{display:flex;flex:1;min-height:0;flex-direction:column;gap:13px;padding:10px 9px 10px 6px;overflow:hidden;color:#ffebc9}
+.scenario-header{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:108px;border:1.5px solid #d6a06a;border-radius:18px;padding:15px 25px;background:linear-gradient(120deg,#59362b,#764937 80%,#573326)}
+.scenario-kicker{font-size:10px;letter-spacing:.14em;color:#d7a66c;font-weight:750}
+.scenario-header h1{font-size:27px;line-height:1.2;font-family:'Yu Mincho','Hiragino Mincho ProN',serif;margin:5px 0 5px}
+.scenario-header p{font-size:12px;color:#e9c7a9;margin:0}
+.scenario-time-panel{display:flex;flex:0 0 auto;flex-direction:column;align-items:center;min-width:260px;padding:8px 26px;border:1px solid #dfaf73;border-radius:15px;background:#44291f}
+.scenario-time-label{color:#ffe9c4;font-size:13px;font-weight:750}
+.scenario-time-label small{font-size:10px;font-weight:450;color:#d9b48b;margin-left:7px}
+.scenario-time-panel strong{font-size:29px;color:#ffcc72;font-variant-numeric:tabular-nums;line-height:1.4}
+#scenarioTotalCount{font-size:11px;color:#e8c7a3}
+.scenario-workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(270px,28%) minmax(0,1fr);gap:12px}
+.scenario-aside,.scenario-editor{display:flex;min-height:0;flex-direction:column;overflow:hidden}
+.scenario-aside-tabs{flex:0 0 51px;display:flex;gap:3px;padding:7px 7px 0;border-bottom:1px solid #d19c69}
+.scenario-aside-tabs button{flex:1;min-width:0;background:#633b2f;color:#ffe7c5;border:1px solid #b7825d;border-bottom:0;border-radius:12px 12px 0 0;font-size:13px;font-weight:800;padding:8px 7px}
+.scenario-aside-tabs button.active{background:#ffe1a8;color:#492d24;border-color:#ffd29a}
+.scenario-aside-body{flex:1;min-height:0;overflow-y:auto;scrollbar-color:#b98a6a transparent;padding:12px 10px 15px}
+.scenario-preview-scene{margin-bottom:14px;padding:9px 10px 12px;border:1px solid #a77956;background:#56352c;border-radius:11px;font-size:12px;line-height:1.8}
+.scenario-preview-scene.active{border-color:#ffca79}
+.scenario-preview-title{display:block;width:100%;text-align:left;background:linear-gradient(90deg,#c38a56,#8a5c40);color:#fff4da;border:0;border-radius:7px;font-weight:850;padding:6px 9px;margin-bottom:7px;font-size:12px;white-space:normal}
+.scenario-preview-line{white-space:pre-wrap;overflow-wrap:anywhere;margin:2px 0;padding:1px 5px;color:#f7e4ce}
+.scenario-preview-line.dialogue{color:#ffe9bb}
+.scenario-preview-line.location{color:#ffcf8c;font-weight:800}
+.scenario-preview-line.direction{color:#d6bfa6;font-style:italic}
+.scenario-preview-empty{font-size:11px;color:#d9b495;margin:5px 0}
+.scenario-list-head{display:flex;justify-content:space-between;gap:8px;align-items:center;color:#ffe9be;padding:5px 7px 9px}
+.scenario-list-head span{font-size:11px;color:#ddbc97}
+.scenario-scene-row{display:flex;align-items:center;gap:5px;border:1px solid #a77752;border-radius:11px;background:#603b2d;margin-bottom:6px;padding:6px}
+.scenario-scene-row.active{border-color:#f3c577;background:#74503b}
+.scenario-scene-select{display:block;flex:1;min-width:0;background:transparent;border:0;color:#ffe9c5;text-align:left;padding:4px 2px;white-space:normal}
+.scenario-scene-select strong{display:block;overflow-wrap:anywhere;line-height:1.5;font-size:12px}
+.scenario-scene-select small{display:block;font-size:10px;color:#e1bb92;margin-top:1px}
+.scenario-scene-actions{display:flex;flex:0 0 auto;gap:3px}
+.scenario-scene-actions button{border:1px solid #ad7b59;border-radius:7px;background:#82523b;color:#ffe3bc;width:25px;height:28px;font-size:13px;padding:0}
+.scenario-add-scene{display:block;width:100%;border:1px dashed #ffcd80;border-radius:10px;padding:10px;background:#765039;color:#ffe8bf;font-size:13px;font-weight:800;margin-top:10px}
+.scenario-list-hint{font-size:10px;color:#dabb9d;line-height:1.7;padding:5px;margin-top:10px}
+.scenario-editor-head{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid #b68a60;flex-wrap:wrap}
+.scenario-title-input{display:flex;align-items:center;gap:9px;flex:1;min-width:230px}
+.scenario-title-input>span{white-space:nowrap;color:#ffce85;font-size:11px;font-weight:850}
+.scenario-title-input label{white-space:nowrap;color:#f4d9b8;font-size:11px}
+.scenario-title-input input{flex:1;min-width:100px;max-width:290px}
+.scenario-editor-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.scenario-scene-stat{font-size:11px;color:#ebc6a0}
+.scenario-editor-actions button{font-size:12px;padding:7px 10px}
+.scenario-modes{display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:wrap;padding:10px 14px 5px}
+.scenario-mode-caption{font-size:11px;color:#e8bb8e;margin-right:5px;white-space:nowrap}
+.scenario-modes button{flex:0 0 auto;border:1px solid #bb895d;border-radius:20px;background:#6c4636;color:#ffe8c2;padding:6px 10px;font-size:12px}
+.scenario-modes button.active{background:#ffe1a4;color:#4d2c22;border-color:#ffcc7a;font-weight:850}
+.scenario-character-buttons{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.scenario-no-character{font-size:11px;color:#d4b49a}
+.scenario-editor-note{padding:4px 16px 7px;font-size:11px;color:#d6ad88}
+#scenarioText{display:block;flex:1;min-height:130px;margin:0 12px 10px;width:calc(100% - 24px);resize:none;border:1px solid #c79565;border-radius:12px;padding:17px 20px;background:#fff5e7;color:#392a22;font-size:15px;line-height:1.9;white-space:pre-wrap;tab-size:2;scrollbar-color:#c59b75 transparent;font-family:'Yu Gothic','Hiragino Kaku Gothic ProN',Meiryo,sans-serif}
+.scenario-editor-foot{display:flex;justify-content:space-between;gap:13px;align-items:center;padding:0 15px 11px;color:#ddb990;font-size:10px;flex-wrap:wrap}
+#scenarioSyncStatus{color:#ffd38d}
+@media(max-width:1150px){.scenario-workspace{grid-template-columns:minmax(230px,31%) minmax(0,1fr)}.scenario-editor-head{align-items:flex-start}.scenario-header{padding:13px 18px}.scenario-time-panel{min-width:210px;padding:8px 13px}}
+@media(max-width:900px){.scenario-screen{overflow:auto}.scenario-header{align-items:flex-start;flex-direction:column;gap:10px}.scenario-workspace{min-height:650px;grid-template-columns:minmax(220px,34%) minmax(370px,1fr)}}

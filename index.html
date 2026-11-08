@@ -10,10 +10,33 @@
 </header>
 <div class="app-shell">
 <nav class="sidebar" aria-label="メインメニュー">
-  <button class="nav-button" data-view="home"><span>⌂</span>ホーム</button><button class="nav-button active" data-view="edit"><span>≋</span>編集</button><button class="nav-button" data-view="markers"><span>⚑</span>マーカー</button><button class="nav-button" data-view="project"><span>▥</span>プロジェクト</button><button class="nav-button" data-view="export" title="音声を書き出す"><span aria-hidden="true">⇧</span>書き出し</button><button class="nav-button" data-view="manual" title="使い方マニュアル"><span>▤</span>マニュアル</button>
+  <button class="nav-button" data-view="home"><span>⌂</span>ホーム</button><button class="nav-button active" data-view="edit"><span>≋</span>編集</button><button class="nav-button" data-view="scenario" title="シナリオを執筆・シーン管理"><span>✎</span>執筆</button><button class="nav-button" data-view="markers"><span>⚑</span>マーカー</button><button class="nav-button" data-view="project"><span>▥</span>プロジェクト</button><button class="nav-button" data-view="export" title="音声を書き出す"><span aria-hidden="true">⇧</span>書き出し</button><button class="nav-button" data-view="manual" title="使い方マニュアル"><span>▤</span>マニュアル</button>
 </nav>
 <main class="main-content" id="mainContent">
   <section class="dashboard-view hidden" id="dashboardView" aria-label="ホーム・マニュアル・プロジェクト管理"></section>
+  <section class="scenario-screen hidden" id="scenarioScreen" aria-label="シナリオ執筆・シーン管理">
+    <header class="scenario-header">
+      <div class="scenario-header-title"><div class="scenario-kicker">Sound Owner Pro · SCENARIO</div><h1>シナリオ執筆</h1><p>キャラクター別の台詞を執筆し、番号付き台本へ自動反映します。</p></div>
+      <div class="scenario-time-panel" aria-live="polite"><span class="scenario-time-label">全シーンの目安尺 <small>240文字 = 1分</small></span><strong id="scenarioDuration">約 0分00秒</strong><span id="scenarioTotalCount">台詞 0文字・0件</span></div>
+    </header>
+    <div class="scenario-workspace">
+      <aside class="panel scenario-aside" aria-label="台本プレビュー・シーンリスト">
+        <div class="scenario-aside-tabs" role="tablist"><button type="button" data-scenario-side="preview" class="active" role="tab" aria-selected="true">▤ プレビュー</button><button type="button" data-scenario-side="scenes" role="tab" aria-selected="false">☰ シーンリスト</button></div>
+        <div id="scenarioPreview" class="scenario-aside-body" role="tabpanel"></div>
+        <div id="scenarioSceneList" class="scenario-aside-body hidden" role="tabpanel"></div>
+      </aside>
+      <section class="panel scenario-editor" aria-label="シーンの本文編集">
+        <div class="scenario-editor-head">
+          <div class="scenario-title-input"><span id="scenarioCurrentNumber">SCENE 01</span><label for="scenarioSceneTitle">シーン名</label><input id="scenarioSceneTitle" type="text" maxlength="70" placeholder="シーンのタイトル"></div>
+          <div class="scenario-editor-actions"><span class="scenario-scene-stat" id="scenarioSceneCount">0文字</span><button id="numberScenario" type="button" class="gold-button" title="全シーンの台詞を001から通し番号にする">001 台詞番号を振る</button><button id="scenarioBackToEditor" class="light-button" type="button">編集画面へ戻る</button></div>
+        </div>
+        <div class="scenario-modes"><span class="scenario-mode-caption">入力モード</span><button type="button" data-compose-mode="location">〇 現在地</button><button type="button" data-compose-mode="direction">// ト書き</button><div id="scenarioCharacterButtons" class="scenario-character-buttons"></div></div>
+        <div class="scenario-editor-note" id="scenarioEditorHint">キャラクターを選んで入力すると「キャラ名：本文」の形式になります。</div>
+        <textarea id="scenarioText" spellcheck="false" aria-label="選択したシーンの台本本文" placeholder="上のキャラクター名やト書きのボタンを選び、ここに文章を入力してください。"></textarea>
+        <footer class="scenario-editor-foot"><span>キャラクター台詞はEnterで普通に改行します。現在地・ト書きは次行も同じ書式になります。</span><span id="scenarioSyncStatus" aria-live="polite">メインの台本と同期中</span></footer>
+      </section>
+    </div>
+  </section>
   <div class="upper-workspace">
     <section class="panel script-panel" aria-label="台本とキャラクター">
       <div class="panel-tabs script-tabs"><button class="tab active" data-script-tab="script">▤ 台本</button><button class="tab" data-script-tab="characters">♙ キャラクター</button></div>
@@ -112,12 +135,12 @@
 <template id="manualTemplate">
   <div class="manual-embedded">
     <header class="dash-hero dash-hero-no-art manual-hero">
-      <div class="dash-hero-text"><div class="dash-eyebrow">Sound Owner Pro · GUIDE</div><h1>使い方マニュアル</h1><p>台本の読み込みから音声編集・書き出し・保存まで、全13章で解説します。</p></div>
+      <div class="dash-hero-text"><div class="dash-eyebrow">Sound Owner Pro · GUIDE</div><h1>使い方マニュアル</h1><p>台本の読み込みから音声編集・書き出し・保存まで、全14章で解説します。</p></div>
       <button type="button" class="manual-back" data-dash-action="edit">← 編集画面へ戻る</button>
     </header>
     <div class="manual-layout">
       <aside class="manual-toc" aria-label="マニュアル目次">
-        <h2>目次 <small>全13章</small></h2>
+        <h2>目次 <small>全14章</small></h2>
         <nav aria-label="章を選択"><button type="button" class="manual-toc-link" data-manual-target="overview">01 はじめに</button>
 <button type="button" class="manual-toc-link" data-manual-target="start">02 新規作成・画面の見方</button>
 <button type="button" class="manual-toc-link" data-manual-target="script">03 台本の読み込み</button>
@@ -130,7 +153,8 @@
 <button type="button" class="manual-toc-link" data-manual-target="export">10 音声の書き出し</button>
 <button type="button" class="manual-toc-link" data-manual-target="projects">11 保存・ライブラリ</button>
 <button type="button" class="manual-toc-link" data-manual-target="shortcuts">12 ショートカット</button>
-<button type="button" class="manual-toc-link" data-manual-target="trouble">13 困ったときは</button></nav>
+<button type="button" class="manual-toc-link" data-manual-target="trouble">13 困ったときは</button>
+<button type="button" class="manual-toc-link" data-manual-target="scenario">14 シナリオ執筆・シーン管理</button></nav>
       </aside>
       <article class="manual-paper" aria-label="Sound Owner Pro 操作マニュアル">
         <div class="manual-cover"><h2>Sound Owner Pro<br>操作マニュアル</h2><p>知りたい項目は左側の目次から移動できます。</p></div>
@@ -141,7 +165,7 @@
 <div class="manual-note">音声の読み込み・再生・加工は基本的にブラウザ内で行います。MP3での<strong>書き出し</strong>のみ、初回に外部エンコーダーを読み込むためネット接続が必要です。</div></section>
 <section id="start"><h2>02｜新規作成・画面の見方</h2>
 <h3>新規プロジェクト</h3><ol><li>画面上部の「新規」ボタン、またはホームの「新規プロジェクト」をクリックします。</li><li>編集中の内容がある場合、確認ダイアログで作成を実行します。</li><li>上部の「プロジェクト：」欄で作品名を入力します。</li></ol>
-<h3>画面の各エリア</h3><table class="manual-table"><tr><th>場所</th><th>役割</th></tr><tr><td>左メニュー</td><td>ホーム／編集／マーカー／プロジェクト／書き出し／マニュアルを切り替えます。</td></tr><tr><td>左上「台本・キャラクター」</td><td>台本と登場人物を管理します。</td></tr><tr><td>中央上</td><td>再生・シーク・波形の配置と編集を行います。</td></tr><tr><td>右側「メディアボックス」タブ</td><td>音声素材をカテゴリとサブタブで管理します。</td></tr><tr><td>右側「プロパティ」タブ</td><td>トラックの音声プロパティ、エフェクトのON／OFF、音声クリップの調整を行います。</td></tr><tr><td>右側「エフェクト」タブ</td><td>EQ・リバーブ・コンプレッサー・リミッターを細かく設定します。</td></tr><tr><td>右側「ミキサー」タブ</td><td>トラック別・マスターの音量を調整します。</td></tr><tr><td>左メニュー「書き出し」</td><td>専用画面で範囲・形式・対象を指定して音声を書き出します。</td></tr><tr><td>最下部</td><td>再生対象の種類を選択します。</td></tr></table></section>
+<h3>画面の各エリア</h3><table class="manual-table"><tr><th>場所</th><th>役割</th></tr><tr><td>左メニュー</td><td>ホーム／編集／執筆／マーカー／プロジェクト／書き出し／マニュアルを切り替えます。</td></tr><tr><td>左上「台本・キャラクター」</td><td>台本と登場人物を管理します。</td></tr><tr><td>中央上</td><td>再生・シーク・波形の配置と編集を行います。</td></tr><tr><td>右側「メディアボックス」タブ</td><td>音声素材をカテゴリとサブタブで管理します。</td></tr><tr><td>右側「プロパティ」タブ</td><td>トラックの音声プロパティ、エフェクトのON／OFF、音声クリップの調整を行います。</td></tr><tr><td>右側「エフェクト」タブ</td><td>EQ・リバーブ・コンプレッサー・リミッターを細かく設定します。</td></tr><tr><td>右側「ミキサー」タブ</td><td>トラック別・マスターの音量を調整します。</td></tr><tr><td>左メニュー「書き出し」</td><td>専用画面で範囲・形式・対象を指定して音声を書き出します。</td></tr><tr><td>最下部</td><td>再生対象の種類を選択します。</td></tr></table></section>
 <section id="script"><h2>03｜台本の読み込み</h2>
 <h3>TXTから読み込む</h3><ol><li>左上の<strong>「台本」</strong>タブを開きます。</li><li>「台本を読み込み」を押して <code>.txt</code> ファイルを選択します。</li><li>読み込まれたセリフが番号順に表示されます。</li></ol>
 <h3>貼り付け・直接編集</h3><p>「貼り付け」はクリップボードからテキストを読み込みます。ブラウザの権限制限などで読み取れない場合は編集欄が開くので、そこで貼り付けて「台本を反映」を押してください。鉛筆ボタンからも編集できます。</p>
@@ -174,6 +198,12 @@
 <h3>ホームのプロジェクト履歴が消えた</h3><p>ブラウザのサイトデータ消去などで消える場合があります。ダウンロード済みの <code>.soundowner.json</code> を再度読み込めば編集を再開できます。</p>
 <h3>ファイルが重くて保存できない</h3><p>音声を含んだJSONは元音声より大きくなる場合があります。不要素材を整理し、長い作品はプロジェクトを分割してください。</p>
 <h3>反映されない・画面がおかしい</h3><p>GitHub Pagesへ更新した直後はブラウザに古いファイルが残ることがあります。<code>Ctrl + F5</code> で再読み込みしてください。作業中の場合は先にプロジェクトを保存してください。</p></section>
+<section id="scenario"><h2>14｜シナリオ執筆・シーン管理</h2>
+<h3>執筆を始める</h3><ol><li>左メニューから「執筆」を開きます。最初は「シーン1」が1つ作成されています。</li><li>メイン編集画面の「キャラクター」タブで名前を登録すると、執筆画面に<strong>キャラ名ボタンが自動追加</strong>されます。台本から認識したキャラ名も利用できます。</li><li>「〇 現在地」「// ト書き」またはキャラクター名のボタンを選びます。</li><li>台本入力欄に書くと、行頭にそれぞれ <code>〇 </code>、<code>// </code>、<code>キャラ名：</code> が入ります。キャラクター台詞の後はEnterで通常改行になり、同じ名前は自動挿入されません。次の台詞ではキャラクターボタンを選択してください。現在地・ト書きはEnterで次行にも同じ書式が入ります。</li></ol>
+<h3>シーンタブの管理</h3><p>左パネルの「シーンリスト」タブで追加・選択・名前変更・順番変更・削除ができます。最大100シーンです。<strong>「プレビュー」タブ</strong>では全シーンを通して確認できます。シーンごとの本文は独立して編集します。</p>
+<h3>台詞の文字数と目安尺</h3><p>上部に全シーンの台詞文字数と<strong>240字につき1分</strong>で計算した目安尺を表示します。キャラ名と「：」、現在地・ト書き、シーン見出しは文字数に含めません。セリフの句読点は文字として数え、改行自体は含みません。尺はあくまで目安であり、間やSEの時間は含みません。</p>
+<h3>001から番号を振る</h3><p>「001 台詞番号を振る」をクリックすると、シーン1から順番にすべての<strong>キャラ名：台詞</strong>の行へ <code>001 </code>、<code>002 </code>、<code>003 </code> …を付与します。再実行すると既存番号を付け直します。台詞が999件を超える場合は処理せず警告します。</p>
+<h3>メイン編集画面と双方向に同期</h3><p>執筆画面で入力した文章はメインの「台本」に自動反映します。番号を付ける前の台詞も一覧に表示されますが、<strong>音声ファイル番号による自動仕分けは番号を振ってから</strong>有効になります。メインの台本編集欄やTXT読込から書き換えた内容も執筆画面に反映されます。</p><p>複数シーンの場合、メイン台本には <code>【シーン01：タイトル】</code> の見出しが挿入されます。メイン台本から編集する場合はこの見出しを維持するとシーン分けを保てます。削除すると1シーンに統合されます。見出しの行は台詞として数えません。</p><p>シーンの内容は音声素材と同様、プロジェクトJSONに保存・復元されます。アンドゥ／リドゥにも対応します。</p></section>
 </div>
       </article>
     </div>

@@ -64,10 +64,14 @@ const migratePresetEntries=items=>{
   }
   return out.filter((p,i,a)=>a.findLastIndex(x=>x.type===p.type&&x.name===p.name)===i);
 };
-const emptyState=()=>({version:1,projectId:uid(),projectName:'新しいプロジェクト',scriptText:'',characters:[],media:[],folders:{sfx:['共通'],env:['共通'],bgm:['共通']},tracks:[{id:uid(),type:'sfx',name:'効果音',characterId:null,gainDb:0,muted:false,solo:false,effects:DEFAULT_FX()},{id:uid(),type:'env',name:'環境音',characterId:null,gainDb:0,muted:false,solo:false,effects:DEFAULT_FX()},{id:uid(),type:'bgm',name:'BGM',characterId:null,gainDb:-4,muted:false,solo:false,effects:DEFAULT_FX()}],clips:[],markers:[],previewStart:null,previewEnd:null,previewFadeIn:1,previewFadeOut:2,masterDb:0,previewVolume:.75,playhead:0,playMode:'all',fileNames:[],loop:false});
+const SCENE_HEADING=/^【シーン\s*([0-9]{1,3})[：:]([^】]*)】\s*$/;
+const SPEECH_LINE=/^\s*(?:(\d{3})[ \t]+)?([^：:\r\n]{1,40})[：:]\s*(.*)$/;
+const SCENE_LIMIT=100;
+const scenarioScene=(name='シーン 1',text='')=>({id:uid(),name,text});
+const emptyState=()=>({version:2,scenes:[scenarioScene()],projectId:uid(),projectName:'新しいプロジェクト',scriptText:'',characters:[],media:[],folders:{sfx:['共通'],env:['共通'],bgm:['共通']},tracks:[{id:uid(),type:'sfx',name:'効果音',characterId:null,gainDb:0,muted:false,solo:false,effects:DEFAULT_FX()},{id:uid(),type:'env',name:'環境音',characterId:null,gainDb:0,muted:false,solo:false,effects:DEFAULT_FX()},{id:uid(),type:'bgm',name:'BGM',characterId:null,gainDb:-4,muted:false,solo:false,effects:DEFAULT_FX()}],clips:[],markers:[],previewStart:null,previewEnd:null,previewFadeIn:1,previewFadeOut:2,masterDb:0,previewVolume:.75,playhead:0,playMode:'all',fileNames:[],loop:false});
 window.App={
   historyPast:[],historyFuture:[],historyRestoring:false,historyInputTimer:null,historyLimit:60,
-  state:emptyState(),buffers:new Map(),rawFiles:new Map(),scriptEntries:[],mediaCategory:'character',mediaFolder:'すべて',scriptTab:'script',fxTab:'properties',inspectorTab:'media',selectedFxType:'eq',selectedClip:null,selectedTrack:null,selectedScript:null,currentView:'edit',librarySearch:'',dashboardRecords:[],pxPerSecond:24,exportCharacters:new Set(),userPresets:[],dragging:null,
+  state:emptyState(),buffers:new Map(),rawFiles:new Map(),scriptEntries:[],mediaCategory:'character',mediaFolder:'すべて',scriptTab:'script',fxTab:'properties',inspectorTab:'media',selectedFxType:'eq',selectedClip:null,selectedTrack:null,selectedScript:null,currentView:'edit',librarySearch:'',dashboardRecords:[],scenarioSceneId:null,scenarioSideTab:'preview',scenarioMode:'direction',scenarioInputTimer:null,pxPerSecond:24,exportCharacters:new Set(),userPresets:[],dragging:null,
   // 履歴は編集状態を複製し、音声バッファ／元ファイルは参照を保つ。
   // 再生位置やUIの再生モードは編集履歴に含めない。
   historySignature(state=this.state){
@@ -132,7 +136,7 @@ window.App={
       this.selectedClip=this.state.clips.some(c=>c.id===snapshot.selectedClip)?snapshot.selectedClip:null;
       this.selectedTrack=this.state.tracks.some(t=>t.id===snapshot.selectedTrack)?snapshot.selectedTrack:null;
       this.scriptEntries=this.parseScript(this.state.scriptText);
-      this.renderAll();
+      this.ensureScenarioState();this.renderAll();
       if(this.currentView==='markers'||this.currentView==='project'||this.currentView==='home')this.renderDashboard();
     }finally{this.historyRestoring=false;this.updateHistoryButtons();}
   },
@@ -154,9 +158,21 @@ window.App={
   length(){return Math.max(0,...this.state.clips.map(c=>c.start+c.duration));},
   fmt(time,ms=true){const n=Math.max(0,Number(time)||0),h=Math.floor(n/3600),m=Math.floor((n%3600)/60),s=Math.floor(n%60),millis=Math.floor(n*1000)%1000;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}${ms?'.'+String(millis).padStart(3,'0'):''}`;},
   short(time){const v=Math.max(0,time);return `${Math.floor(v/60)}:${String(Math.floor(v%60)).padStart(2,'0')}`;},
-  parseScript(source){const lines=String(source||'').replace(/\r/g,'').split('\n');const entries=[];let current=null;for(const line of lines){const m=line.match(/^\s*(\d{3})\s+([^：:\n]{1,40})\s*[：:]\s*(.*)$/);if(m){current={number:m[1],name:m[2].trim(),text:m[3].trim(),index:entries.length};entries.push(current);}else if(current&&line.trim()){current.text+='\n'+line.trim();}}return entries;},
+  parseScript(source){
+    const entries=[];let current=null;
+    for(const line of String(source||'').replace(/\r/g,'').split('\n')){
+      if(SCENE_HEADING.test(line)||/^\s*(?:〇(?:\s|$)|\/\/(?:\s|$))/.test(line)||!line.trim()){current=null;continue;}
+      const m=line.match(SPEECH_LINE);
+      if(m&&m[2].trim()&&!/^\s*(?:〇|\/\/)/.test(line)){
+        current={number:m[1]||null,name:m[2].trim(),text:m[3].trim(),index:entries.length};entries.push(current);
+      }else if(SCENE_HEADING.test(line)||/^\s*(?:〇(?:\s|$)|\/\/(?:\s|$))/.test(line)||!line.trim()){
+        current=null;
+      }else if(current){current.text+='\n'+line.trim();}
+    }
+    return entries;
+  },
   syncCharactersFromScript(){this.scriptEntries=this.parseScript(this.state.scriptText);for(const row of this.scriptEntries)if(!this.state.characters.some(c=>c.name===row.name))this.state.characters.push({id:uid(),name:row.name,color:COLORS[this.state.characters.length%COLORS.length]});this.reclassifyMedia();},
-  reclassifyMedia(){const numMap=new Map(this.scriptEntries.map(e=>[e.number,e.name]));for(const m of this.state.media){if(m.type!=='character')continue;const prefix=m.name.match(/^(\d{3})(?!\d)/)?.[1];const name=prefix?numMap.get(prefix):null;const char=name?this.state.characters.find(c=>c.name===name):null;if(char){m.characterId=char.id;m.folder=char.name;}else if(!m.characterId||!this.state.characters.some(c=>c.id===m.characterId)){m.characterId=null;m.folder='未分類';}}},
+  reclassifyMedia(){const numMap=new Map(this.scriptEntries.filter(e=>e.number).map(e=>[e.number,e.name]));for(const m of this.state.media){if(m.type!=='character')continue;const prefix=m.name.match(/^(\d{3})(?!\d)/)?.[1];const name=prefix?numMap.get(prefix):null;const char=name?this.state.characters.find(c=>c.name===name):null;if(char){m.characterId=char.id;m.folder=char.name;}else if(!m.characterId||!this.state.characters.some(c=>c.id===m.characterId)){m.characterId=null;m.folder='未分類';}}},
   init(){try{const current=localStorage.getItem('sound-owner-presets-v2');const older=current===null?localStorage.getItem('sound-owner-presets-v1'):null;const parsed=JSON.parse(current??older??'[]');this.userPresets=migratePresetEntries(Array.isArray(parsed)?parsed:[]);if(older!==null)this.persistFxPresets();}catch(_){this.userPresets=[];}
     this.bindUI();this.changeInspectorTab(this.inspectorTab);this.renderAll();this.resetHistory();this.installHistoryTracking();if(location.hash==='#manual')this.openNav('manual');window.addEventListener('resize',()=>this.resizeTimeline());window.addEventListener('keydown',e=>this.shortcut(e));window.addEventListener('beforeunload',e=>{if(this.state.clips.length||this.state.scriptText){e.preventDefault();e.returnValue='';}});
   },
@@ -169,7 +185,14 @@ window.App={
     document.querySelectorAll('[data-script-tab]').forEach(b=>b.onclick=()=>this.changeScriptTab(b.dataset.scriptTab));
     $('importScript').onclick=()=>$('scriptFile').click();$('scriptFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;this.state.scriptText=await f.text();this.applyScript();this.captureHistory();e.target.value='';};
     $('pasteScript').onclick=async()=>{try{const text=await navigator.clipboard.readText();if(text){this.state.scriptText=text;this.applyScript();this.captureHistory();this.toast('クリップボードから台本を読み込みました。');return;}}catch(_){}this.editScript();this.toast('台本を入力して「台本を反映」を押してください。');};
-    $('editScript').onclick=()=>this.editScript();$('cancelScript').onclick=()=>this.closeScriptEditor();$('applyScript').onclick=()=>{this.state.scriptText=$('scriptText').value;this.applyScript();this.closeScriptEditor();};
+    $('editScript').onclick=()=>this.editScript();$('cancelScript').onclick=()=>this.closeScriptEditor();
+    $('scriptText').addEventListener('input',()=>{
+      this.state.scriptText=$('scriptText').value;
+      this.syncScenesFromScript();this.syncCharactersFromScript();this.refreshScript();
+      clearTimeout(this.scenarioInputTimer);
+      this.scenarioInputTimer=setTimeout(()=>{this.refreshCharacters();this.refreshMedia();this.captureHistory();},500);
+    });
+    $('applyScript').onclick=()=>{this.state.scriptText=$('scriptText').value;this.syncScenesFromScript();this.applyScript();this.closeScriptEditor();};
     $('addCharacter').onclick=()=>this.addCharacter($('characterName').value);$('characterName').onkeydown=e=>{if(e.key==='Enter')this.addCharacter(e.target.value);};
     document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{this.mediaCategory=b.dataset.category;this.mediaFolder='すべて';AudioEngine.stopPreview();this.refreshMedia();});
     $('mediaImportBottom').onclick=()=>$('audioFiles').click();$('audioFiles').onchange=async e=>{await this.importAudio([...e.target.files]);e.target.value='';};
@@ -195,7 +218,7 @@ window.App={
     document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{this.state.playMode=b.dataset.mode;this.refreshModes();if(AudioEngine.playing)this.replay();});
     $('returnToEditor').onclick=()=>this.openNav('edit');
     $('exportEditMarkers').onclick=()=>{this.openNav('edit');this.markerModal();};
-    $('dashboardView').addEventListener('click',e=>this.dashboardClick(e));
+    $('dashboardView').addEventListener('click',e=>this.dashboardClick(e));this.bindScenarioUI();
   },
   shortcut(e){
     const modifier=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();
@@ -211,11 +234,12 @@ window.App={
   },
   openNav(view){
     if(view==='assets'||view==='library')view='home';
-    if(!['home','edit','markers','project','export','manual'].includes(view))view='edit';
+    if(!['home','edit','scenario','markers','project','export','manual'].includes(view))view='edit';
     this.currentView=view;
     document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===view));
     $('mainContent').classList.toggle('dash-mode',view!=='edit');
-    $('dashboardView').classList.toggle('hidden',view==='edit'||view==='export');
+    $('dashboardView').classList.toggle('hidden',view==='edit'||view==='export'||view==='scenario');
+    $('scenarioScreen').classList.toggle('hidden',view!=='scenario');
     $('exportScreen').classList.toggle('hidden',view!=='export');
     if(view==='export'){
       $('exportProjectName').textContent=this.state.projectName||'名称未設定';
@@ -224,7 +248,8 @@ window.App={
       $('exportTrackCount').textContent=this.state.tracks.length;
       this.refreshExportOptions();
       this.resizeTimeline();
-    }else if(view!=='edit')this.refreshDashboard();
+    }else if(view==='scenario'){this.renderScenarioScreen();}
+    else if(view!=='edit')this.refreshDashboard();
     else this.resizeTimeline();
   },
   openProjectLibrary(){
@@ -259,7 +284,7 @@ window.App={
     await this.recentDb('put',item);
   },
   async refreshDashboard(){
-    const view=this.currentView;if(view==='edit')return;
+    const view=this.currentView;if(view==='edit'||view==='scenario')return;
     if(view==='manual'){this.renderDashboard();return;}
     let warning='';
     try{this.dashboardRecords=(await this.recentDb('all')).sort((a,b)=>b.updatedAt-a.updatedAt);}catch(e){this.dashboardRecords=[];warning=`ブラウザ内のプロジェクト履歴を取得できませんでした（${escapeText(e.message)}）。JSONファイルからの読み込みは利用できます。`;}
@@ -350,16 +375,16 @@ window.App={
       else{if(id==='preview-start')this.state.previewStart=null;else if(id==='preview-end')this.state.previewEnd=null;else this.state.markers=this.state.markers.filter(x=>x.id!==id);this.renderMarkers();this.renderDashboard();}
     }
   },
-  renderAll(){this.syncCharactersFromScript();$('projectName').value=this.state.projectName;this.changeScriptTab(this.scriptTab);this.refreshMedia();this.refreshCharacters();this.renderTimeline();this.refreshFx();this.refreshMixer();this.refreshExportOptions();this.refreshModes();this.refreshTransport();$('previewVolume').value=String(Math.round(this.state.previewVolume*100));$('previewFadeIn').value=this.state.previewFadeIn;$('previewFadeOut').value=this.state.previewFadeOut;if(this.currentView!=='edit')this.refreshDashboard();},
-  newProject(){AudioEngine.stop();AudioEngine.stopPreview();this.state=emptyState();this.buffers.clear();this.rawFiles.clear();this.selectedClip=null;this.selectedTrack=null;this.scriptEntries=[];this.exportCharacters=new Set();$('mediaSearch').value='';this.mediaCategory='character';this.mediaFolder='すべて';this.renderAll();this.resetHistory();this.openNav('edit');this.toast('新しいプロジェクトを作成しました。');},
+  renderAll(){this.ensureScenarioState();this.syncCharactersFromScript();$('projectName').value=this.state.projectName;this.changeScriptTab(this.scriptTab);this.refreshMedia();this.refreshCharacters();this.renderTimeline();this.refreshFx();this.refreshMixer();this.refreshExportOptions();this.refreshModes();this.refreshTransport();$('previewVolume').value=String(Math.round(this.state.previewVolume*100));$('previewFadeIn').value=this.state.previewFadeIn;$('previewFadeOut').value=this.state.previewFadeOut;if(this.currentView==='scenario')this.renderScenarioScreen();else if(this.currentView!=='edit')this.refreshDashboard();},
+  newProject(){AudioEngine.stop();AudioEngine.stopPreview();this.closeScriptEditor();this.state=emptyState();this.buffers.clear();this.rawFiles.clear();this.selectedClip=null;this.selectedTrack=null;this.scriptEntries=[];this.scenarioSceneId=null;this.scenarioSideTab='preview';this.scenarioMode='direction';this.exportCharacters=new Set();$('mediaSearch').value='';this.mediaCategory='character';this.mediaFolder='すべて';this.renderAll();this.resetHistory();this.openNav('edit');this.toast('新しいプロジェクトを作成しました。');},
   changeScriptTab(tab){this.scriptTab=tab;document.querySelectorAll('[data-script-tab]').forEach(b=>b.classList.toggle('active',b.dataset.scriptTab===tab));$('scriptTab').classList.toggle('hidden',tab!=='script');$('characterTab').classList.toggle('hidden',tab!=='characters');if(tab==='script')this.refreshScript();else this.refreshCharacters();},
   editScript(){$('scriptText').value=this.state.scriptText;$('scriptLines').classList.add('hidden');$('scriptEditor').classList.remove('hidden');$('scriptText').focus();},
   closeScriptEditor(){$('scriptLines').classList.remove('hidden');$('scriptEditor').classList.add('hidden');},
-  applyScript(){this.syncCharactersFromScript();this.refreshScript();this.refreshCharacters();this.refreshMedia();this.refreshFx();this.refreshExportOptions();this.toast(`台本を反映：${this.scriptEntries.length} 件のセリフ`);},
-  refreshScript(){$('scriptCount').textContent=`${this.scriptEntries.length} セリフ`;$('scriptLines').replaceChildren();if(!this.scriptEntries.length){$('scriptLines').innerHTML='<div class="empty-state">台本を読み込むか、貼り付けてください。<br><small>001 キャラ名：セリフ</small></div>';return;}for(const item of this.scriptEntries){const b=document.createElement('button');b.className='script-line'+(this.selectedScript===item.index?' selected':'');b.innerHTML=`<span class="line-num">${escapeText(item.number)}</span><span class="line-text"><strong>${escapeText(item.name)}：</strong><br>${escapeText(item.text)}</span>`;b.onclick=()=>{this.selectedScript=item.index;this.refreshScript();const match=this.state.clips.find(c=>{const m=this.state.media.find(f=>f.id===c.mediaId);return m?.name.match(/^(\d{3})(?!\d)/)?.[1]===item.number;});if(match){this.selectClip(match.id);AudioEngine.seek(match.start);}else{this.mediaCategory='character';this.mediaFolder=item.name;this.refreshMedia();}};$('scriptLines').append(b);}},
-  addCharacter(name){name=String(name||'').trim();if(!name)return this.toast('キャラクター名を入力してください。',true);if(this.state.characters.some(c=>c.name===name))return this.toast('同名のキャラクターが登録されています。',true);const c={id:uid(),name,color:COLORS[this.state.characters.length%COLORS.length]};this.state.characters.push(c);$('characterName').value='';this.reclassifyMedia();this.refreshCharacters();this.refreshMedia();this.refreshExportOptions();this.toast(`${name} を登録しました。`);},
+  applyScript(){this.syncScenesFromScript();this.syncCharactersFromScript();this.refreshScript();this.refreshCharacters();this.refreshMedia();this.refreshFx();this.refreshExportOptions();this.toast(`台本を反映：${this.scriptEntries.length} 件のセリフ`);},
+  refreshScript(){$('scriptCount').textContent=`${this.scriptEntries.length} セリフ`;$('scriptLines').replaceChildren();if(!this.scriptEntries.length){$('scriptLines').innerHTML='<div class="empty-state">台本を読み込むか、貼り付けてください。<br><small>001 キャラ名：セリフ</small></div>';return;}for(const item of this.scriptEntries){const b=document.createElement('button');b.className='script-line'+(this.selectedScript===item.index?' selected':'');b.innerHTML=`<span class="line-num">${escapeText(item.number||'—')}</span><span class="line-text"><strong>${escapeText(item.name)}：</strong><br>${escapeText(item.text)}</span>`;b.onclick=()=>{this.selectedScript=item.index;this.refreshScript();const match=this.state.clips.find(c=>{const m=this.state.media.find(f=>f.id===c.mediaId);return !!item.number&&m?.name.match(/^(\d{3})(?!\d)/)?.[1]===item.number;});if(match){this.selectClip(match.id);AudioEngine.seek(match.start);}else{this.mediaCategory='character';this.mediaFolder=item.name;this.refreshMedia();}};$('scriptLines').append(b);}},
+  addCharacter(name){name=String(name||'').trim();if(!name)return this.toast('キャラクター名を入力してください。',true);if(this.state.characters.some(c=>c.name===name))return this.toast('同名のキャラクターが登録されています。',true);const c={id:uid(),name,color:COLORS[this.state.characters.length%COLORS.length]};this.state.characters.push(c);$('characterName').value='';this.reclassifyMedia();this.refreshCharacters();this.refreshMedia();this.refreshExportOptions();this.renderScenarioCharacterButtons();this.toast(`${name} を登録しました。`);},
   refreshCharacters(){$('characterList').replaceChildren();for(const c of this.state.characters){const row=document.createElement('div');row.className='character-entry';const dot=document.createElement('span');dot.className='char-dot';dot.style.background=c.color;const name=document.createElement('span');name.className='character-name';name.textContent=c.name;const track=document.createElement('button');track.className='char-action';track.textContent='＋ トラック';track.onclick=()=>{this.ensureTrack('character',c.id);this.renderTimeline();this.refreshFx();this.refreshMixer();};const del=document.createElement('button');del.className='char-action';del.title='登録を削除';del.textContent='×';del.onclick=()=>this.removeCharacter(c.id);row.append(dot,name,track,del);$('characterList').append(row);}},
-  removeCharacter(id){const c=this.state.characters.find(x=>x.id===id);if(!c||!confirm(`「${c.name}」を削除しますか？関連トラックとクリップも削除されます。`))return;const tids=new Set(this.state.tracks.filter(t=>t.characterId===id).map(t=>t.id));this.state.tracks=this.state.tracks.filter(t=>!tids.has(t.id));this.state.clips=this.state.clips.filter(x=>!tids.has(x.trackId));this.state.characters=this.state.characters.filter(x=>x.id!==id);for(const media of this.state.media)if(media.characterId===id){media.characterId=null;media.folder='未分類';}this.selectedTrack=null;this.selectedClip=null;this.refreshCharacters();this.refreshMedia();this.renderTimeline();this.refreshFx();this.refreshMixer();this.refreshExportOptions();},
+  removeCharacter(id){const c=this.state.characters.find(x=>x.id===id);if(!c||!confirm(`「${c.name}」を削除しますか？関連トラックとクリップも削除されます。`))return;const tids=new Set(this.state.tracks.filter(t=>t.characterId===id).map(t=>t.id));this.state.tracks=this.state.tracks.filter(t=>!tids.has(t.id));this.state.clips=this.state.clips.filter(x=>!tids.has(x.trackId));this.state.characters=this.state.characters.filter(x=>x.id!==id);for(const media of this.state.media)if(media.characterId===id){media.characterId=null;media.folder='未分類';}this.selectedTrack=null;this.selectedClip=null;this.refreshCharacters();this.refreshMedia();this.renderTimeline();this.refreshFx();this.refreshMixer();this.refreshExportOptions();this.renderScenarioCharacterButtons();},
   getFolders(){if(this.mediaCategory==='character')return['すべて',...this.state.characters.map(c=>c.name),'未分類'];return['すべて',...(this.state.folders[this.mediaCategory]||[])];},
   refreshMedia(){document.querySelectorAll('[data-category]').forEach(b=>b.classList.toggle('active',b.dataset.category===this.mediaCategory));const folders=this.getFolders();if(!folders.includes(this.mediaFolder))this.mediaFolder='すべて';$('mediaFolders').replaceChildren();folders.forEach(f=>{const b=document.createElement('button');b.textContent=f;b.title='フォルダーを開く';b.className='folder-chip'+(this.mediaFolder===f?' active':'');b.onclick=()=>{this.mediaFolder=f;this.refreshMedia();};if(f!=='すべて'&&this.mediaCategory!=='character')b.oncontextmenu=e=>{e.preventDefault();this.folderMenu(f);};$('mediaFolders').append(b);});$('addFolder').disabled=this.mediaCategory==='character';this.refreshMediaList();},
   refreshMediaList(){const query=$('mediaSearch').value.toLocaleLowerCase().trim();const files=this.state.media.filter(m=>m.type===this.mediaCategory&&(this.mediaFolder==='すべて'||m.folder===this.mediaFolder)&&(!query||m.name.toLocaleLowerCase().includes(query))).sort((a,b)=>a.name.localeCompare(b.name,'ja',{numeric:true}));$('mediaList').replaceChildren();if(!files.length){$('mediaList').innerHTML='<div class="empty-state">音声素材がありません。<br><small>「＋ 音声素材を追加」またはドラッグ＆ドロップ</small></div>';return;}for(const media of files){const item=document.createElement('div');item.className='media-item';const preview=document.createElement('button');preview.className='media-preview'+(AudioEngine.previewSource?.__mediaId===media.id?' playing':'');preview.textContent=AudioEngine.previewSource?.__mediaId===media.id?'■':'▶';preview.title='試聴';preview.onclick=()=>this.previewMedia(media);const name=document.createElement('button');name.className='media-filename';name.textContent=media.name;name.title='クリックして分類・名前を編集';name.style.border='0';name.style.background='transparent';name.style.color='inherit';name.onclick=()=>this.mediaDetails(media.id);const length=document.createElement('span');length.className='media-length';length.textContent=this.short(media.duration||0);const add=document.createElement('button');add.className='media-add';add.textContent='+';add.title='シーク位置に追加';add.onclick=()=>this.addMediaToTimeline(media.id);const del=document.createElement('button');del.className='media-delete';del.title=`${media.name} を削除`;del.setAttribute('aria-label',`${media.name} を削除`);del.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 3h4M7 7l1 14h8l1-14M10 11v6m4-6v6"/></svg>';del.onclick=()=>this.deleteMedia(media.id);item.append(preview,name,length,add,del);$('mediaList').append(item);}},
@@ -511,11 +536,200 @@ window.App={
   showSettings(){this.modal('アプリ設定',`<label><input type="checkbox" id="loopPlayback" ${this.state.loop?'checked':''}> 再生終了時に先頭からループする</label><p class="note">タイムラインはドラッグで移動・トリミングできます。入力音声はWAVとMP3。書き出し時は44.1 kHz / 16bitステレオWAV、MP3は192 kbpsステレオです。</p><p class="note">音声はブラウザ内で処理します。プロジェクトJSONには音声素材がすべて含まれ、ファイルサイズが大きくなることがあります。</p>`,[{text:'キャンセル',action:()=>true},{text:'設定を保存',primary:true,action:()=>{this.state.loop=$('loopPlayback').checked;return true;}}]);},
   showHelp(){this.openNav('manual');},
   projectInfo(){this.modal('プロジェクト管理',`<p><strong>名前：</strong>${escapeText(this.state.projectName)}</p><p><strong>音声素材：</strong>${this.state.media.length} 件　<strong>トラック：</strong>${this.state.tracks.length} 件　<strong>クリップ：</strong>${this.state.clips.length} 件</p><p><strong>再生時間：</strong>${this.fmt(this.length())}</p><p class="note">保存形式：Sound Owner Pro専用JSON（音声データも格納）。別のブラウザ・PCでも読み込めます。</p>`,[{text:'閉じる',action:()=>true},{text:'JSONを保存',primary:true,action:()=>{this.saveProject();return true;}}]);},
+  // シナリオ本文をシーンごとに管理し、メイン台本のプレーンテキストと同期する。
+  ensureScenarioState(){
+    if(!Array.isArray(this.state.scenes)||!this.state.scenes.length)this.state.scenes=[scenarioScene('シーン 1',this.state.scriptText||'')];
+    this.state.scenes=this.state.scenes.slice(0,SCENE_LIMIT).map((scene,i)=>({
+      id:typeof scene?.id==='string'&&scene.id?scene.id:uid(),
+      name:String(scene?.name||`シーン ${i+1}`).slice(0,70).replace(/[\r\n】]/g,' ').trim()||`シーン ${i+1}`,
+      text:String(scene?.text||'').replace(/\r/g,'')
+    }));
+    if(!this.state.scenes.some(sc=>sc.id===this.scenarioSceneId))this.scenarioSceneId=this.state.scenes[0].id;
+  },
+  activeScenarioScene(){return this.state.scenes.find(scene=>scene.id===this.scenarioSceneId)||this.state.scenes[0];},
+  composedScenarioText(){
+    this.ensureScenarioState();
+    if(this.state.scenes.length===1)return this.state.scenes[0].text;
+    return this.state.scenes.map((scene,i)=>`【シーン${String(i+1).padStart(2,'0')}：${scene.name}】${scene.text?'\n'+scene.text:''}`).join('\n\n');
+  },
+  // メインのTXT・貼り付け・直接編集からの逆同期。見出しがなければ全体を1シーンとして保持。
+  syncScenesFromScript(){
+    const source=String(this.state.scriptText||'').replace(/\r/g,'');
+    const lines=source.split('\n');
+    const parts=[];let current=null;const prelude=[];
+    for(const line of lines){
+      const head=line.match(SCENE_HEADING);
+      if(head){if(current)parts.push(current);current={name:head[2].trim(),lines:[]};}
+      else if(current)current.lines.push(line);else prelude.push(line);
+    }
+    if(current)parts.push(current);
+    if(parts.length&&parts.length<=SCENE_LIMIT){
+      const existing=this.state.scenes||[];
+      const prefix=prelude.join('\n').trim();
+      this.state.scenes=parts.map((part,i)=>({id:existing[i]?.id||uid(),name:part.name||`シーン ${i+1}`,
+        text:(i===0&&prefix?prefix+'\n':'')+part.lines.join('\n').replace(/^\n+|\n+$/g,'')}));
+    }else if(parts.length>SCENE_LIMIT){this.toast('シーン見出しが100件を超えたため、全文を1つのシーンとして保持しました。',true);const first=this.state.scenes?.[0];this.state.scenes=[{id:first?.id||uid(),name:'統合台本',text:source}];}
+    else{const first=this.state.scenes?.[0];this.state.scenes=[{id:first?.id||uid(),name:first?.name||'シーン 1',text:source}];}
+    this.ensureScenarioState();
+  },
+  syncScriptFromScenes(){
+    this.state.scriptText=this.composedScenarioText();
+    this.syncCharactersFromScript();
+    this.refreshScript();this.renderScenarioCharacterButtons();this.refreshMedia();
+    this.updateScenarioStats();
+    if(this.scenarioSideTab==='preview')this.renderScenarioPreview();
+    else this.renderScenarioSceneList();
+    $('scenarioSyncStatus').textContent='台本と自動同期済み';
+    if(this.currentView==='edit'&&$('scriptEditor')&&!$('scriptEditor').classList.contains('hidden'))$('scriptText').value=this.state.scriptText;
+  },
+  scenarioCounts(text){
+    const speeches=this.parseScript(text);
+    const characters=speeches.reduce((total,item)=>total+Array.from(item.text.replace(/\n/g,'')).length,0);
+    return {characters,speeches:speeches.length};
+  },
+  scenarioDurationLabel(n){const total=Math.ceil(n/240*60);return `約 ${Math.floor(total/60)}分${String(total%60).padStart(2,'0')}秒`;},
+  updateScenarioStats(){
+    const total=this.state.scenes.reduce((n,scene)=>n+this.scenarioCounts(scene.text).characters,0);
+    const speeches=this.state.scenes.reduce((n,scene)=>n+this.scenarioCounts(scene.text).speeches,0);
+    $('scenarioDuration').textContent=this.scenarioDurationLabel(total);
+    $('scenarioTotalCount').textContent=`台詞 ${total.toLocaleString('ja-JP')}文字・${speeches}件`;
+    const scene=this.activeScenarioScene();if(scene){const count=this.scenarioCounts(scene.text);$('scenarioSceneCount').textContent=`このシーン ${count.characters}文字 / 台詞 ${count.speeches}件`;}
+    const idx=this.state.scenes.findIndex(x=>x.id===this.scenarioSceneId);
+    $('scenarioCurrentNumber').textContent=`SCENE ${String(idx+1).padStart(2,'0')} / ${this.state.scenes.length}`;
+  },
+  renderScenarioScreen(){
+    this.ensureScenarioState();const scene=this.activeScenarioScene();
+    $('scenarioSceneTitle').value=scene.name;
+    $('scenarioText').value=scene.text;
+    this.updateScenarioStats();this.renderScenarioCharacterButtons();this.setScenarioSideTab(this.scenarioSideTab);
+    $('scenarioSyncStatus').textContent='台本と自動同期済み';
+  },
+  renderScenarioCharacterButtons(){
+    const container=$('scenarioCharacterButtons');if(!container)return;
+    const selected=this.state.characters.some(c=>this.scenarioMode===`character:${c.id}`);
+    if(this.scenarioMode.startsWith('character:')&&!selected)this.scenarioMode='direction';
+    container.replaceChildren();
+    if(!this.state.characters.length){const hint=document.createElement('span');hint.className='scenario-no-character';hint.textContent='キャラクター未登録（編集 → キャラクターで登録）';container.append(hint);}
+    for(const c of this.state.characters){const b=document.createElement('button');b.type='button';b.textContent=c.name;b.title=`${c.name}： で入力`;b.dataset.composeMode=`character:${c.id}`;b.className=this.scenarioMode===b.dataset.composeMode?'active':'';b.onclick=()=>this.setScenarioMode(b.dataset.composeMode);container.append(b);}
+    document.querySelectorAll('#scenarioScreen [data-compose-mode]').forEach(b=>{const active=b.dataset.composeMode===this.scenarioMode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+  },
+  scenarioPrefix(){
+    if(this.scenarioMode==='location')return '〇 ';
+    if(this.scenarioMode==='direction')return '// ';
+    if(this.scenarioMode.startsWith('character:')){
+      const id=this.scenarioMode.slice('character:'.length),c=this.state.characters.find(x=>x.id===id);
+      return c?`${c.name}：`:'';
+    }
+    return '';
+  },
+  setScenarioMode(mode){
+    this.scenarioMode=mode;this.renderScenarioCharacterButtons();
+    const area=$('scenarioText'),prefix=this.scenarioPrefix();if(!area||!prefix)return;
+    const pos=area.selectionStart;const start=area.value.lastIndexOf('\n',Math.max(0,pos-1))+1;
+    const end=area.value.indexOf('\n',start),stop=end<0?area.value.length:end;
+    const line=area.value.slice(start,stop);
+    // 本文のある行は書き換えず、空行または入力済みの空プレフィックスだけ置換。
+    if(!line.trim()||/^(?:〇|\/\/|[^：\n]{1,40}：)\s*$/.test(line)){
+      area.setRangeText(prefix,start,stop,'end');area.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    area.focus();
+  },
+  setScenarioSideTab(tab){
+    this.scenarioSideTab=tab==='scenes'?'scenes':'preview';
+    document.querySelectorAll('#scenarioScreen [data-scenario-side]').forEach(b=>{const active=b.dataset.scenarioSide===this.scenarioSideTab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));});
+    $('scenarioPreview').classList.toggle('hidden',this.scenarioSideTab!=='preview');
+    $('scenarioSceneList').classList.toggle('hidden',this.scenarioSideTab!=='scenes');
+    if(this.scenarioSideTab==='preview')this.renderScenarioPreview();else this.renderScenarioSceneList();
+  },
+  renderScenarioPreview(){
+    const box=$('scenarioPreview');if(!box)return;
+    box.replaceChildren();
+    for(let i=0;i<this.state.scenes.length;i++){
+      const scene=this.state.scenes[i];const section=document.createElement('section');section.className='scenario-preview-scene'+(scene.id===this.scenarioSceneId?' active':'');
+      const title=document.createElement('button');title.type='button';title.className='scenario-preview-title';title.textContent=`${String(i+1).padStart(2,'0')} · ${scene.name}`;title.onclick=()=>this.selectScenarioScene(scene.id);section.append(title);
+      const lines=scene.text.split('\n');
+      if(scene.text.trim())for(const line of lines){const p=document.createElement('div');p.className='scenario-preview-line';if(SPEECH_LINE.test(line))p.classList.add('dialogue');else if(/^\s*〇(?:\s|$)/.test(line))p.classList.add('location');else if(/^\s*\/\//.test(line))p.classList.add('direction');p.textContent=line||' ';section.append(p);}
+      else{const p=document.createElement('p');p.className='scenario-preview-empty';p.textContent='（このシーンはまだ空です）';section.append(p);}
+      box.append(section);
+    }
+  },
+  renderScenarioSceneList(){
+    const box=$('scenarioSceneList');if(!box)return;
+    box.replaceChildren();const head=document.createElement('div');head.className='scenario-list-head';head.innerHTML=`<strong>シーン一覧</strong><span>${this.state.scenes.length} / ${SCENE_LIMIT}</span>`;box.append(head);
+    for(let i=0;i<this.state.scenes.length;i++){
+      const scene=this.state.scenes[i],row=document.createElement('div');row.className='scenario-scene-row'+(scene.id===this.scenarioSceneId?' active':'');
+      row.innerHTML=`<button class="scenario-scene-select" type="button" data-scene-action="select" data-id="${escapeText(scene.id)}"><strong>${String(i+1).padStart(2,'0')} ${escapeText(scene.name)}</strong><small>${this.scenarioCounts(scene.text).characters}文字 / ${this.scenarioCounts(scene.text).speeches}台詞</small></button><div class="scenario-scene-actions"><button type="button" title="上へ移動" data-scene-action="up" data-id="${escapeText(scene.id)}" ${i===0?'disabled':''}>↑</button><button type="button" title="下へ移動" data-scene-action="down" data-id="${escapeText(scene.id)}" ${i===this.state.scenes.length-1?'disabled':''}>↓</button><button type="button" title="削除" data-scene-action="delete" data-id="${escapeText(scene.id)}" ${this.state.scenes.length===1?'disabled':''}>×</button></div>`;
+      box.append(row);
+    }
+    const add=document.createElement('button');add.type='button';add.className='scenario-add-scene';add.textContent='＋ シーンを追加';add.disabled=this.state.scenes.length>=SCENE_LIMIT;add.onclick=()=>this.addScenarioScene();box.append(add);
+    const hint=document.createElement('p');hint.className='scenario-list-hint';hint.textContent='シーン名は右側の「シーン名」欄で変更できます。台詞番号を振り直すと現在のシーン順が反映されます。';box.append(hint);
+  },
+  selectScenarioScene(id){if(!this.state.scenes.some(x=>x.id===id))return;this.scenarioSceneId=id;this.renderScenarioScreen();},
+  addScenarioScene(){
+    if(this.state.scenes.length>=SCENE_LIMIT){this.toast('シーンは最大100件です。',true);return;}
+    this.captureHistory();
+    const next=scenarioScene(`シーン ${this.state.scenes.length+1}`);
+    this.state.scenes.push(next);this.scenarioSceneId=next.id;this.syncScriptFromScenes();this.renderScenarioScreen();this.captureHistory();$('scenarioText').focus();
+  },
+  moveScenarioScene(id,direction){
+    const i=this.state.scenes.findIndex(x=>x.id===id),j=i+direction;if(i<0||j<0||j>=this.state.scenes.length)return;
+    this.captureHistory();
+    [this.state.scenes[i],this.state.scenes[j]]=[this.state.scenes[j],this.state.scenes[i]];
+    this.syncScriptFromScenes();this.renderScenarioScreen();this.captureHistory();
+  },
+  deleteScenarioScene(id){
+    if(this.state.scenes.length===1)return;
+    const i=this.state.scenes.findIndex(x=>x.id===id);if(i<0)return;
+    if(!confirm(`「${this.state.scenes[i].name}」を削除しますか？\nこのシーンの台本も削除されます。`))return;
+    this.captureHistory();this.state.scenes.splice(i,1);
+    if(id===this.scenarioSceneId)this.scenarioSceneId=this.state.scenes[Math.min(i,this.state.scenes.length-1)].id;
+    this.syncScriptFromScenes();this.renderScenarioScreen();this.captureHistory();
+  },
+  numberScenarioDialogues(){
+    this.ensureScenarioState();let counter=0;
+    const count=this.state.scenes.reduce((n,scene)=>n+scene.text.split('\n').filter(line=>SPEECH_LINE.test(line)&&!SCENE_HEADING.test(line)&&!/^\s*(?:〇|\/\/)/.test(line)).length,0);
+    if(count>999){this.toast(`台詞が${count}件あります。3桁番号の上限999件を超えているため変更しません。`,true);return;}
+    this.captureHistory();
+    for(const scene of this.state.scenes){scene.text=scene.text.split('\n').map(line=>{
+      const m=line.match(SPEECH_LINE);if(!m||!m[2].trim()||SCENE_HEADING.test(line)||/^\s*(?:〇|\/\/)/.test(line))return line;
+      counter++;return `${String(counter).padStart(3,'0')} ${m[2].trim()}：${m[3]}`;
+    }).join('\n');}
+    this.syncScriptFromScenes();this.renderScenarioScreen();this.captureHistory();this.toast(`全${this.state.scenes.length}シーン・${counter}台詞に連番を振りました。`);
+  },
+  bindScenarioUI(){
+    document.querySelectorAll('#scenarioScreen [data-scenario-side]').forEach(button=>button.onclick=()=>this.setScenarioSideTab(button.dataset.scenarioSide));
+    document.querySelectorAll('#scenarioScreen [data-compose-mode]').forEach(button=>button.onclick=()=>this.setScenarioMode(button.dataset.composeMode));
+    $('scenarioBackToEditor').onclick=()=>this.openNav('edit');
+    $('numberScenario').onclick=()=>this.numberScenarioDialogues();
+    $('scenarioSceneTitle').addEventListener('input',event=>{
+      const scene=this.activeScenarioScene();if(!scene)return;
+      scene.name=event.target.value.replace(/[\r\n】]/g,' ').slice(0,70)||`シーン ${this.state.scenes.indexOf(scene)+1}`;
+      this.syncScriptFromScenes();
+      clearTimeout(this.scenarioInputTimer);this.scenarioInputTimer=setTimeout(()=>this.captureHistory(),700);
+    });
+    $('scenarioSceneTitle').addEventListener('change',()=>{this.captureHistory();});
+    const editor=$('scenarioText');
+    editor.addEventListener('input',()=>{
+      const scene=this.activeScenarioScene();if(!scene)return;
+      scene.text=editor.value.replace(/\r/g,'');this.syncScriptFromScenes();
+      clearTimeout(this.scenarioInputTimer);this.scenarioInputTimer=setTimeout(()=>this.captureHistory(),650);
+    });
+    // Enter / Shift+Enter はモードを問わず textarea 標準の改行に任せる。
+    // 書式（〇 / // / キャラクター名：）はボタンをクリックしたときだけ挿入する。
+    $('scenarioSceneList').addEventListener('click',e=>{
+      const b=e.target.closest('[data-scene-action]');if(!b)return;
+      const {sceneAction:action,id}=b.dataset;
+      if(action==='select')this.selectScenarioScene(id);
+      else if(action==='up')this.moveScenarioScene(id,-1);
+      else if(action==='down')this.moveScenarioScene(id,1);
+      else if(action==='delete')this.deleteScenarioScene(id);
+    });
+  },
   readAsDataURL(file){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(fr.error);fr.readAsDataURL(file);});},
   async saveProject(){try{this.toast('音声を含むプロジェクトJSONを作成します。');const assets={};for(const media of this.state.media){const raw=this.rawFiles.get(media.id);if(!raw){this.toast(`音声データがありません：${media.name}`,true);continue;}assets[media.id]={name:media.name,mime:media.mime,data:await this.readAsDataURL(raw)};}
       const packed={format:'SoundOwnerProProject',version:1,savedAt:new Date().toISOString(),state:{...this.state,playhead:0},assets};const blob=new Blob([JSON.stringify(packed)],{type:'application/json'});ExportEngine.download(blob,`${ExportEngine.clean(this.state.projectName||'project')}.soundowner.json`);try{await this.rememberProject(packed,blob);this.toast('プロジェクトJSONを保存し、ライブラリに登録しました。');}catch(storageError){console.warn(storageError);this.toast('JSONは保存しましたが、ブラウザ履歴には登録できませんでした。保存容量・プライベートモードをご確認ください。',true);}if(this.currentView!=='edit')await this.refreshDashboard();}catch(e){console.error(e);this.toast('保存に失敗：'+e.message,true);}},
   dataUrlToBlob(url){const parts=url.split(','),type=/^data:([^;,]+)/.exec(parts[0])?.[1]||'audio/wav',raw=atob(parts[1]||'');const chunkSize=32768,arr=[];for(let i=0;i<raw.length;i+=chunkSize){const s=raw.slice(i,i+chunkSize),b=new Uint8Array(s.length);for(let j=0;j<s.length;j++)b[j]=s.charCodeAt(j);arr.push(b);}return new Blob(arr,{type});},
-  async loadProject(file,{remember=true}={}){if(!file)return;try{const result=JSON.parse(await file.text());if(result.format!=='SoundOwnerProProject'||!result.state||!result.assets)throw Error('Sound Owner ProのプロジェクトJSONではありません。');const s=result.state;if(!Array.isArray(s.tracks)||!Array.isArray(s.media)||!Array.isArray(s.clips))throw Error('プロジェクトデータが破損しています。');AudioEngine.stop();AudioEngine.stopPreview();const restored={...emptyState(),...s,projectId:s.projectId||uid(),playhead:0};const files=new Map(),buffers=new Map(),ctx=await AudioEngine.ensure();for(const media of restored.media){const item=result.assets[media.id];if(!item?.data)throw Error(`「${media.name}」の音声データが見つかりません。`);const blob=this.dataUrlToBlob(item.data);const ab=await blob.arrayBuffer(),buffer=await ctx.decodeAudioData(ab.slice(0));files.set(media.id,blob);buffers.set(media.id,buffer);media.duration=buffer.duration;}
-      this.state=restored;this.buffers=buffers;this.rawFiles=files;this.selectedClip=null;this.selectedTrack=null;this.mediaFolder='すべて';this.exportCharacters=new Set();this.renderAll();this.resetHistory();this.openNav('edit');if(remember){try{await this.rememberProject({...result,state:restored},new Blob([JSON.stringify(result)],{type:'application/json'}));}catch(storageError){console.warn('ブラウザの履歴に登録できませんでした',storageError);}}else{try{const record=await this.recentDb('get',restored.projectId);if(record)await this.recentDb('put',{...record,updatedAt:Date.now()});}catch(_){}}this.toast(`プロジェクトを開きました（素材 ${restored.media.length} 件）。`);}catch(e){console.error(e);this.toast('プロジェクト読み込み失敗：'+e.message,true);}},
+  async loadProject(file,{remember=true}={}){if(!file)return;try{const result=JSON.parse(await file.text());if(result.format!=='SoundOwnerProProject'||!result.state||!result.assets)throw Error('Sound Owner ProのプロジェクトJSONではありません。');const s=result.state;if(!Array.isArray(s.tracks)||!Array.isArray(s.media)||!Array.isArray(s.clips))throw Error('プロジェクトデータが破損しています。');AudioEngine.stop();AudioEngine.stopPreview();this.closeScriptEditor();const restored={...emptyState(),...s,projectId:s.projectId||uid(),playhead:0};if(!Array.isArray(s.scenes)||!s.scenes.length)restored.scenes=[scenarioScene('シーン 1',s.scriptText||'')];const files=new Map(),buffers=new Map(),ctx=await AudioEngine.ensure();for(const media of restored.media){const item=result.assets[media.id];if(!item?.data)throw Error(`「${media.name}」の音声データが見つかりません。`);const blob=this.dataUrlToBlob(item.data);const ab=await blob.arrayBuffer(),buffer=await ctx.decodeAudioData(ab.slice(0));files.set(media.id,blob);buffers.set(media.id,buffer);media.duration=buffer.duration;}
+      this.state=restored;this.buffers=buffers;this.rawFiles=files;this.selectedClip=null;this.selectedTrack=null;this.mediaFolder='すべて';this.exportCharacters=new Set();this.ensureScenarioState();this.renderAll();this.resetHistory();this.openNav('edit');if(remember){try{await this.rememberProject({...result,state:restored},new Blob([JSON.stringify(result)],{type:'application/json'}));}catch(storageError){console.warn('ブラウザの履歴に登録できませんでした',storageError);}}else{try{const record=await this.recentDb('get',restored.projectId);if(record)await this.recentDb('put',{...record,updatedAt:Date.now()});}catch(_){}}this.toast(`プロジェクトを開きました（素材 ${restored.media.length} 件）。`);}catch(e){console.error(e);this.toast('プロジェクト読み込み失敗：'+e.message,true);}},
 };
 window.addEventListener('DOMContentLoaded',()=>App.init());
