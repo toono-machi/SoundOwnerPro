@@ -66,7 +66,89 @@ const migratePresetEntries=items=>{
 };
 const emptyState=()=>({version:1,projectId:uid(),projectName:'新しいプロジェクト',scriptText:'',characters:[],media:[],folders:{sfx:['共通'],env:['共通'],bgm:['共通']},tracks:[{id:uid(),type:'sfx',name:'効果音',characterId:null,gainDb:0,muted:false,solo:false,effects:DEFAULT_FX()},{id:uid(),type:'env',name:'環境音',characterId:null,gainDb:0,muted:false,solo:false,effects:DEFAULT_FX()},{id:uid(),type:'bgm',name:'BGM',characterId:null,gainDb:-4,muted:false,solo:false,effects:DEFAULT_FX()}],clips:[],markers:[],previewStart:null,previewEnd:null,previewFadeIn:1,previewFadeOut:2,masterDb:0,previewVolume:.75,playhead:0,playMode:'all',fileNames:[],loop:false});
 window.App={
+  historyPast:[],historyFuture:[],historyRestoring:false,historyInputTimer:null,historyLimit:60,
   state:emptyState(),buffers:new Map(),rawFiles:new Map(),scriptEntries:[],mediaCategory:'character',mediaFolder:'すべて',scriptTab:'script',fxTab:'properties',inspectorTab:'media',selectedFxType:'eq',selectedClip:null,selectedTrack:null,selectedScript:null,currentView:'edit',librarySearch:'',dashboardRecords:[],pxPerSecond:24,exportCharacters:new Set(),userPresets:[],dragging:null,
+  // 履歴は編集状態を複製し、音声バッファ／元ファイルは参照を保つ。
+  // 再生位置やUIの再生モードは編集履歴に含めない。
+  historySignature(state=this.state){
+    const {playhead,playMode,previewVolume,...editable}=state;
+    return JSON.stringify([editable,this.userPresets]);
+  },
+  historySnapshot(){return {
+    state:clone(this.state),signature:this.historySignature(),
+    buffers:new Map(this.buffers),rawFiles:new Map(this.rawFiles),
+    userPresets:clone(this.userPresets),
+    selectedClip:this.selectedClip,selectedTrack:this.selectedTrack
+  };},
+  resetHistory(){
+    clearTimeout(this.historyInputTimer);this.historyInputTimer=null;
+    this.historyPast=[this.historySnapshot()];this.historyFuture=[];
+    this.updateHistoryButtons();
+  },
+  captureHistory(){
+    if(this.historyRestoring)return false;
+    const signature=this.historySignature();
+    if(this.historyPast.at(-1)?.signature===signature)return false;
+    this.historyPast.push(this.historySnapshot());
+    if(this.historyPast.length>this.historyLimit+1)this.historyPast.shift();
+    this.historyFuture=[];
+    this.updateHistoryButtons();
+    return true;
+  },
+  updateHistoryButtons(){
+    const undo=$('undoEdit'),redo=$('redoEdit');if(!undo||!redo)return;
+    undo.disabled=this.historyPast.length<=1;
+    redo.disabled=this.historyFuture.length===0;
+    undo.title=`元に戻す（Ctrl+Z）・残り ${Math.max(0,this.historyPast.length-1)} 回`;
+    redo.title=`やり直す（Ctrl+Y / Ctrl+Shift+Z）・残り ${this.historyFuture.length} 回`;
+  },
+  installHistoryTracking(){
+    // 各編集イベントの処理終了後に差分を確定する。シークや選択のみは記録しない。
+    const afterEvent=()=>queueMicrotask(()=>this.captureHistory());
+    for(const kind of ['click','change','pointerup','pointercancel'])document.addEventListener(kind,afterEvent);
+    document.addEventListener('input',event=>{
+      const el=event.target;
+      if(!(el instanceof HTMLInputElement)||el.id!=='projectName')return;
+      clearTimeout(this.historyInputTimer);
+      this.historyInputTimer=setTimeout(()=>{this.historyInputTimer=null;this.captureHistory();},650);
+    });
+    $('undoEdit').addEventListener('click',()=>this.undoEdit());
+    $('redoEdit').addEventListener('click',()=>this.redoEdit());
+  },
+  restoreHistory(snapshot){
+    if(!snapshot)return;
+    this.historyRestoring=true;
+    try{
+      AudioEngine.stop();AudioEngine.stopPreview();
+      const {playhead,playMode,previewVolume}=this.state;
+      const presetsChanged=JSON.stringify(this.userPresets)!==JSON.stringify(snapshot.userPresets||[]);
+      this.userPresets=clone(snapshot.userPresets||[]);
+      if(presetsChanged)this.persistFxPresets();
+      this.state=clone(snapshot.state);
+      this.state.playhead=playhead;this.state.playMode=playMode;
+      this.state.previewVolume=previewVolume;
+      this.buffers=new Map(snapshot.buffers);
+      this.rawFiles=new Map(snapshot.rawFiles);
+      this.selectedClip=this.state.clips.some(c=>c.id===snapshot.selectedClip)?snapshot.selectedClip:null;
+      this.selectedTrack=this.state.tracks.some(t=>t.id===snapshot.selectedTrack)?snapshot.selectedTrack:null;
+      this.scriptEntries=this.parseScript(this.state.scriptText);
+      this.renderAll();
+      if(this.currentView==='markers'||this.currentView==='project'||this.currentView==='home')this.renderDashboard();
+    }finally{this.historyRestoring=false;this.updateHistoryButtons();}
+  },
+  undoEdit(){
+    clearTimeout(this.historyInputTimer);this.historyInputTimer=null;
+    this.captureHistory();
+    if(this.historyPast.length<=1)return;
+    this.historyFuture.push(this.historyPast.pop());
+    this.restoreHistory(this.historyPast.at(-1));
+  },
+  redoEdit(){
+    clearTimeout(this.historyInputTimer);this.historyInputTimer=null;
+    if(!this.historyFuture.length)return;
+    this.historyPast.push(this.historyFuture.pop());
+    this.restoreHistory(this.historyPast.at(-1));
+  },
   toast(message,error=false){const node=document.createElement('div');node.className='toast'+(error?' error':'');node.textContent=message;$('toastArea').append(node);setTimeout(()=>node.remove(),3800);},
   modal(title,html,buttons){$('modalTitle').textContent=title;$('modalContent').innerHTML=html;$('modalActions').replaceChildren();(buttons||[{text:'閉じる',action:()=>true}]).forEach(b=>{const btn=document.createElement('button');btn.type='button';btn.textContent=b.text;btn.className=b.primary?'primary':'';if(b.danger)btn.classList.add('danger');btn.onclick=async()=>{const result=await b.action();if(result!==false)$('modal').close();};$('modalActions').append(btn);});$('modal').showModal();},
   length(){return Math.max(0,...this.state.clips.map(c=>c.start+c.duration));},
@@ -76,7 +158,7 @@ window.App={
   syncCharactersFromScript(){this.scriptEntries=this.parseScript(this.state.scriptText);for(const row of this.scriptEntries)if(!this.state.characters.some(c=>c.name===row.name))this.state.characters.push({id:uid(),name:row.name,color:COLORS[this.state.characters.length%COLORS.length]});this.reclassifyMedia();},
   reclassifyMedia(){const numMap=new Map(this.scriptEntries.map(e=>[e.number,e.name]));for(const m of this.state.media){if(m.type!=='character')continue;const prefix=m.name.match(/^(\d{3})(?!\d)/)?.[1];const name=prefix?numMap.get(prefix):null;const char=name?this.state.characters.find(c=>c.name===name):null;if(char){m.characterId=char.id;m.folder=char.name;}else if(!m.characterId||!this.state.characters.some(c=>c.id===m.characterId)){m.characterId=null;m.folder='未分類';}}},
   init(){try{const current=localStorage.getItem('sound-owner-presets-v2');const older=current===null?localStorage.getItem('sound-owner-presets-v1'):null;const parsed=JSON.parse(current??older??'[]');this.userPresets=migratePresetEntries(Array.isArray(parsed)?parsed:[]);if(older!==null)this.persistFxPresets();}catch(_){this.userPresets=[];}
-    this.bindUI();this.changeInspectorTab(this.inspectorTab);this.renderAll();if(location.hash==='#manual')this.openNav('manual');window.addEventListener('resize',()=>this.resizeTimeline());window.addEventListener('keydown',e=>this.shortcut(e));window.addEventListener('beforeunload',e=>{if(this.state.clips.length||this.state.scriptText){e.preventDefault();e.returnValue='';}});
+    this.bindUI();this.changeInspectorTab(this.inspectorTab);this.renderAll();this.resetHistory();this.installHistoryTracking();if(location.hash==='#manual')this.openNav('manual');window.addEventListener('resize',()=>this.resizeTimeline());window.addEventListener('keydown',e=>this.shortcut(e));window.addEventListener('beforeunload',e=>{if(this.state.clips.length||this.state.scriptText){e.preventDefault();e.returnValue='';}});
   },
   bindUI(){
     $('projectName').addEventListener('input',e=>this.state.projectName=e.target.value);
@@ -85,8 +167,8 @@ window.App={
     $('openSettings').onclick=()=>this.showSettings();$('openHelp').onclick=()=>this.showHelp();
     document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>this.openNav(b.dataset.view));
     document.querySelectorAll('[data-script-tab]').forEach(b=>b.onclick=()=>this.changeScriptTab(b.dataset.scriptTab));
-    $('importScript').onclick=()=>$('scriptFile').click();$('scriptFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;this.state.scriptText=await f.text();this.applyScript();e.target.value='';};
-    $('pasteScript').onclick=async()=>{try{const text=await navigator.clipboard.readText();if(text){this.state.scriptText=text;this.applyScript();this.toast('クリップボードから台本を読み込みました。');return;}}catch(_){}this.editScript();this.toast('台本を入力して「台本を反映」を押してください。');};
+    $('importScript').onclick=()=>$('scriptFile').click();$('scriptFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;this.state.scriptText=await f.text();this.applyScript();this.captureHistory();e.target.value='';};
+    $('pasteScript').onclick=async()=>{try{const text=await navigator.clipboard.readText();if(text){this.state.scriptText=text;this.applyScript();this.captureHistory();this.toast('クリップボードから台本を読み込みました。');return;}}catch(_){}this.editScript();this.toast('台本を入力して「台本を反映」を押してください。');};
     $('editScript').onclick=()=>this.editScript();$('cancelScript').onclick=()=>this.closeScriptEditor();$('applyScript').onclick=()=>{this.state.scriptText=$('scriptText').value;this.applyScript();this.closeScriptEditor();};
     $('addCharacter').onclick=()=>this.addCharacter($('characterName').value);$('characterName').onkeydown=e=>{if(e.key==='Enter')this.addCharacter(e.target.value);};
     document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{this.mediaCategory=b.dataset.category;this.mediaFolder='すべて';AudioEngine.stopPreview();this.refreshMedia();});
@@ -115,7 +197,14 @@ window.App={
     $('exportEditMarkers').onclick=()=>{this.openNav('edit');this.markerModal();};
     $('dashboardView').addEventListener('click',e=>this.dashboardClick(e));
   },
-  shortcut(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();this.saveProject();return;}
+  shortcut(e){
+    const modifier=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();
+    if(modifier&&(key==='z'||key==='y')){
+      const el=document.activeElement;
+      if($('modal').open||['INPUT','TEXTAREA','SELECT'].includes(el?.tagName)||el?.isContentEditable)return;
+      e.preventDefault();if(key==='z'&&!e.shiftKey)this.undoEdit();else this.redoEdit();return;
+    }
+    if(modifier&&key==='s'){e.preventDefault();this.saveProject();return;}
     if(this.currentView!=='edit')return;
     if($('modal').open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable)return;
     if(e.code==='Space'){e.preventDefault();this.togglePlay();}if(e.key.toLowerCase()==='m')this.addMarker('normal');if(e.key.toLowerCase()==='s')this.splitClip();if(e.key==='Delete'||e.key==='Backspace')this.deleteSelectedClip();if(e.key==='ArrowLeft')AudioEngine.seek(this.state.playhead-(e.shiftKey?5:.5));if(e.key==='ArrowRight')AudioEngine.seek(this.state.playhead+(e.shiftKey?5:.5));
@@ -262,7 +351,7 @@ window.App={
     }
   },
   renderAll(){this.syncCharactersFromScript();$('projectName').value=this.state.projectName;this.changeScriptTab(this.scriptTab);this.refreshMedia();this.refreshCharacters();this.renderTimeline();this.refreshFx();this.refreshMixer();this.refreshExportOptions();this.refreshModes();this.refreshTransport();$('previewVolume').value=String(Math.round(this.state.previewVolume*100));$('previewFadeIn').value=this.state.previewFadeIn;$('previewFadeOut').value=this.state.previewFadeOut;if(this.currentView!=='edit')this.refreshDashboard();},
-  newProject(){AudioEngine.stop();AudioEngine.stopPreview();this.state=emptyState();this.buffers.clear();this.rawFiles.clear();this.selectedClip=null;this.selectedTrack=null;this.scriptEntries=[];this.exportCharacters=new Set();$('mediaSearch').value='';this.mediaCategory='character';this.mediaFolder='すべて';this.renderAll();this.openNav('edit');this.toast('新しいプロジェクトを作成しました。');},
+  newProject(){AudioEngine.stop();AudioEngine.stopPreview();this.state=emptyState();this.buffers.clear();this.rawFiles.clear();this.selectedClip=null;this.selectedTrack=null;this.scriptEntries=[];this.exportCharacters=new Set();$('mediaSearch').value='';this.mediaCategory='character';this.mediaFolder='すべて';this.renderAll();this.resetHistory();this.openNav('edit');this.toast('新しいプロジェクトを作成しました。');},
   changeScriptTab(tab){this.scriptTab=tab;document.querySelectorAll('[data-script-tab]').forEach(b=>b.classList.toggle('active',b.dataset.scriptTab===tab));$('scriptTab').classList.toggle('hidden',tab!=='script');$('characterTab').classList.toggle('hidden',tab!=='characters');if(tab==='script')this.refreshScript();else this.refreshCharacters();},
   editScript(){$('scriptText').value=this.state.scriptText;$('scriptLines').classList.add('hidden');$('scriptEditor').classList.remove('hidden');$('scriptText').focus();},
   closeScriptEditor(){$('scriptLines').classList.remove('hidden');$('scriptEditor').classList.add('hidden');},
@@ -292,7 +381,7 @@ window.App={
   folderMenu(folder){const type=this.mediaCategory;this.modal('サブタブ管理',`<p>「${escapeText(folder)}」</p><label>新しい名前 <input id="renameFolder" maxlength="30" value="${escapeText(folder)}"></label>`,[{text:'削除',danger:true,action:()=>{this.state.folders[type]=this.state.folders[type].filter(x=>x!==folder);for(const m of this.state.media)if(m.type===type&&m.folder===folder)m.folder='共通';if(!this.state.folders[type].includes('共通'))this.state.folders[type].unshift('共通');this.mediaFolder='すべて';this.refreshMedia();return true;}},{text:'名前を変更',primary:true,action:()=>{const name=$('renameFolder').value.trim();if(!name||name!==folder&&this.state.folders[type].includes(name))return false;this.state.folders[type]=this.state.folders[type].map(x=>x===folder?name:x);for(const m of this.state.media)if(m.type===type&&m.folder===folder)m.folder=name;this.mediaFolder=name;this.refreshMedia();return true;}}]);},
   async importAudio(files){const audio=files.filter(f=>/\.(mp3|wav)$/i.test(f.name)||f.type.startsWith('audio/'));if(!audio.length){this.toast('WAVまたはMP3音声ファイルを選択してください。',true);return;}let ok=0;for(const file of audio){try{const ab=await file.arrayBuffer();const ctx=await AudioEngine.ensure();const buffer=await ctx.decodeAudioData(ab.slice(0));const id=uid(),type=this.mediaCategory;const prefix=file.name.match(/^(\d{3})(?!\d)/)?.[1];const charName=prefix?this.scriptEntries.find(x=>x.number===prefix)?.name:null;const character=charName?this.state.characters.find(c=>c.name===charName):null;const folder=type==='character'?(character?.name||'未分類'):(this.mediaFolder==='すべて'?'共通':this.mediaFolder);
       const meta={id,name:file.name,type,folder,characterId:type==='character'?character?.id||null:null,duration:buffer.duration,mime:file.type||(/\.mp3$/i.test(file.name)?'audio/mpeg':'audio/wav')};this.state.media.push(meta);this.buffers.set(id,buffer);this.rawFiles.set(id,file);ok++;}catch(e){console.error(e);this.toast(`読み込み失敗：${file.name}`,true);}}
-    this.refreshMedia();this.toast(`${ok} 件の音声素材を読み込みました。`);},
+    this.refreshMedia();if(ok)this.captureHistory();this.toast(`${ok} 件の音声素材を読み込みました。`);},
   mediaDetails(id){const m=this.state.media.find(x=>x.id===id);if(!m)return;const cats=Object.entries(TYPE).map(([key,v])=>`<option value="${key}" ${m.type===key?'selected':''}>${v.label}</option>`).join('');const folders=(this.state.folders[m.type]||[]).map(f=>`<option ${m.folder===f?'selected':''}>${escapeText(f)}</option>`).join('');const chars=this.state.characters.map(c=>`<option value="${escapeText(c.id)}" ${c.id===m.characterId?'selected':''}>${escapeText(c.name)}</option>`).join('');this.modal('音声素材を管理',`<label>ファイル名 <input id="mediaEditName" value="${escapeText(m.name)}"></label><label>カテゴリ <select id="mediaEditType">${cats}</select></label><label id="mediaEditFolderRow">サブタブ <select id="mediaEditFolder">${folders}</select></label><label id="mediaEditCharRow">キャラクター <select id="mediaEditChar"><option value="">未分類</option>${chars}</select></label><p class="note">長さ ${this.fmt(m.duration)} ／ タイムラインに配置済みの素材を削除すると該当クリップも消えます。</p>`,[{text:'素材を削除',danger:true,action:()=>{return this.deleteMedia(id);}},{text:'変更を保存',primary:true,action:()=>{m.name=$('mediaEditName').value.trim()||m.name;m.type=$('mediaEditType').value;if(m.type==='character'){m.characterId=$('mediaEditChar').value||null;m.folder=this.state.characters.find(c=>c.id===m.characterId)?.name||'未分類';}else{m.characterId=null;const folder=$('mediaEditFolder').value;m.folder=this.state.folders[m.type]?.includes(folder)?folder:'共通';}this.refreshMedia();this.renderTimeline();return true;}}]);
     const update=()=>{const type=$('mediaEditType').value;$('mediaEditFolderRow').classList.toggle('hidden',type==='character');$('mediaEditCharRow').classList.toggle('hidden',type!=='character');if(type!=='character')$('mediaEditFolder').innerHTML=(this.state.folders[type]||['共通']).map(f=>`<option>${escapeText(f)}</option>`).join('');};$('mediaEditType').onchange=update;update();},
   ensureTrack(type,characterId=null){let t=this.state.tracks.find(t=>t.type===type&&(type!=='character'||t.characterId===characterId));if(t)return t;const char=this.state.characters.find(c=>c.id===characterId);if(type==='character'&&!char)throw Error('キャラクターを登録してください。');t={id:uid(),type,name:type==='character'?char.name:TYPE[type].label,characterId:type==='character'?characterId:null,gainDb:type==='bgm'?-4:0,muted:false,solo:false,effects:DEFAULT_FX()};this.state.tracks.push(t);return t;},
@@ -411,7 +500,7 @@ window.App={
     }else if(Array.isArray(parsed.presets)){items=parsed.presets;}else throw Error('プリセットの種類が不正です。');
     const imported=migratePresetEntries(items);if(!imported.length)throw Error('有効なプリセットがありません。');
     for(const p of imported){this.userPresets=this.userPresets.filter(old=>!(old.type===p.type&&old.name===p.name));this.userPresets.push(p);}
-    this.persistFxPresets();this.refreshFx();this.toast(`${imported.length} 個のエフェクト別プリセットを読み込みました。`);
+    this.persistFxPresets();this.refreshFx();this.captureHistory();this.toast(`${imported.length} 個のエフェクト別プリセットを読み込みました。`);
   }catch(e){this.toast('プリセットの読み込みに失敗：'+e.message,true);}},
   refreshMixer(){const container=$('mixerGrid');container.replaceChildren();const channels=[...this.state.tracks.map(t=>({id:t.id,name:t.name,color:t.type==='character'?(this.state.characters.find(c=>c.id===t.characterId)?.color||TYPE.character.color):TYPE[t.type].color,db:t.gainDb,track:t})),{id:'master',name:'マスター',color:'#ffd478',db:this.state.masterDb,track:null}];for(const ch of channels){const el=document.createElement('div');el.className='channel';el.style.setProperty('--slider-color',ch.color);const name=document.createElement('div');name.className='channel-name';name.textContent=ch.name;name.title=ch.name;const range=document.createElement('input');range.type='range';range.min='-36';range.max='12';range.step='.5';range.value=ch.db;range.title=ch.name+' 音量';const val=document.createElement('div');val.className='channel-value';val.textContent=Number(ch.db).toFixed(1)+' dB';range.oninput=()=>{const db=Number(range.value);if(ch.track)ch.track.gainDb=db;else this.state.masterDb=db;val.textContent=db.toFixed(1)+' dB';};range.onchange=()=>{if(AudioEngine.playing)this.replay();};const meter=document.createElement('div');meter.className='channel-meter';const fill=document.createElement('b');fill.style.width=clamp(50+ch.db*2,0,100)+'%';meter.append(fill);el.append(name,range,val,meter);container.append(el);}},
   getSelectedExportCharacters(){return Array.from(this.exportCharacters);},
@@ -427,6 +516,6 @@ window.App={
       const packed={format:'SoundOwnerProProject',version:1,savedAt:new Date().toISOString(),state:{...this.state,playhead:0},assets};const blob=new Blob([JSON.stringify(packed)],{type:'application/json'});ExportEngine.download(blob,`${ExportEngine.clean(this.state.projectName||'project')}.soundowner.json`);try{await this.rememberProject(packed,blob);this.toast('プロジェクトJSONを保存し、ライブラリに登録しました。');}catch(storageError){console.warn(storageError);this.toast('JSONは保存しましたが、ブラウザ履歴には登録できませんでした。保存容量・プライベートモードをご確認ください。',true);}if(this.currentView!=='edit')await this.refreshDashboard();}catch(e){console.error(e);this.toast('保存に失敗：'+e.message,true);}},
   dataUrlToBlob(url){const parts=url.split(','),type=/^data:([^;,]+)/.exec(parts[0])?.[1]||'audio/wav',raw=atob(parts[1]||'');const chunkSize=32768,arr=[];for(let i=0;i<raw.length;i+=chunkSize){const s=raw.slice(i,i+chunkSize),b=new Uint8Array(s.length);for(let j=0;j<s.length;j++)b[j]=s.charCodeAt(j);arr.push(b);}return new Blob(arr,{type});},
   async loadProject(file,{remember=true}={}){if(!file)return;try{const result=JSON.parse(await file.text());if(result.format!=='SoundOwnerProProject'||!result.state||!result.assets)throw Error('Sound Owner ProのプロジェクトJSONではありません。');const s=result.state;if(!Array.isArray(s.tracks)||!Array.isArray(s.media)||!Array.isArray(s.clips))throw Error('プロジェクトデータが破損しています。');AudioEngine.stop();AudioEngine.stopPreview();const restored={...emptyState(),...s,projectId:s.projectId||uid(),playhead:0};const files=new Map(),buffers=new Map(),ctx=await AudioEngine.ensure();for(const media of restored.media){const item=result.assets[media.id];if(!item?.data)throw Error(`「${media.name}」の音声データが見つかりません。`);const blob=this.dataUrlToBlob(item.data);const ab=await blob.arrayBuffer(),buffer=await ctx.decodeAudioData(ab.slice(0));files.set(media.id,blob);buffers.set(media.id,buffer);media.duration=buffer.duration;}
-      this.state=restored;this.buffers=buffers;this.rawFiles=files;this.selectedClip=null;this.selectedTrack=null;this.mediaFolder='すべて';this.exportCharacters=new Set();this.renderAll();this.openNav('edit');if(remember){try{await this.rememberProject({...result,state:restored},new Blob([JSON.stringify(result)],{type:'application/json'}));}catch(storageError){console.warn('ブラウザの履歴に登録できませんでした',storageError);}}else{try{const record=await this.recentDb('get',restored.projectId);if(record)await this.recentDb('put',{...record,updatedAt:Date.now()});}catch(_){}}this.toast(`プロジェクトを開きました（素材 ${restored.media.length} 件）。`);}catch(e){console.error(e);this.toast('プロジェクト読み込み失敗：'+e.message,true);}},
+      this.state=restored;this.buffers=buffers;this.rawFiles=files;this.selectedClip=null;this.selectedTrack=null;this.mediaFolder='すべて';this.exportCharacters=new Set();this.renderAll();this.resetHistory();this.openNav('edit');if(remember){try{await this.rememberProject({...result,state:restored},new Blob([JSON.stringify(result)],{type:'application/json'}));}catch(storageError){console.warn('ブラウザの履歴に登録できませんでした',storageError);}}else{try{const record=await this.recentDb('get',restored.projectId);if(record)await this.recentDb('put',{...record,updatedAt:Date.now()});}catch(_){}}this.toast(`プロジェクトを開きました（素材 ${restored.media.length} 件）。`);}catch(e){console.error(e);this.toast('プロジェクト読み込み失敗：'+e.message,true);}},
 };
 window.addEventListener('DOMContentLoaded',()=>App.init());

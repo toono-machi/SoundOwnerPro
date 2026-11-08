@@ -352,3 +352,11 @@
 }
 /* Keep the fixed upper-right floral decoration from covering the fourth inspector tab. */
 .mimosa-right{z-index:1;}
+
+/* v1.9: 操作履歴（Undo / Redo） */
+.history-controls{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;padding-right:7px;border-right:1px solid #9d7056}
+.timeline-actions .history-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:#664033;color:#ffe7c5;border:1px solid #ba8a5d;border-radius:9px;padding:5px 8px;font-size:11px;font-weight:750;white-space:nowrap;min-height:27px}
+.timeline-actions .history-btn:first-letter{font-size:16px}
+.timeline-actions .history-btn:hover:not(:disabled){background:#7b4b39}
+.timeline-actions .history-btn:disabled{opacity:.37;cursor:default;filter:none}
+@media(max-width:1400px){.timeline-actions .history-btn{padding:4px 6px}.timeline-actions .history-btn span{display:none}.timeline-actions .history-btn{font-size:17px;min-width:29px}.timeline-hint{display:none}}
